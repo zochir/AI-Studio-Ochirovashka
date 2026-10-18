@@ -94,6 +94,7 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build debug APK
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
@@ -103,7 +104,9 @@ jobs:
           test -s "$APK" || { echo "Debug APK missing or empty"; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/apk-output"
           cp "$APK" "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk"
-          sha256sum "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk" | tee "$GITHUB_WORKSPACE/apk-output/SHA256SUMS.txt"
+          unzip -t "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk" >/dev/null
+          unzip -l "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk" | grep -q "assets/index.html"
+          (cd "$GITHUB_WORKSPACE/apk-output" && sha256sum AI-Studio-Ochirovashka-debug.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4

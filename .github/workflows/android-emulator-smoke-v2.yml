@@ -1,0 +1,112 @@
+name: Android emulator smoke test (bounded)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '**.zip'
+      - 'scripts/**'
+      - '.github/workflows/android-emulator-smoke-v2.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: android-emulator-smoke-v2-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  emulator-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Locate Android project ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+          test -n "$ZIP_FILE" || { echo 'No project ZIP found at repository root'; exit 1; }
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
+          PROJECT_DIR="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
+          test -n "$PROJECT_DIR" || { echo 'Gradle settings file missing'; exit 1; }
+          test -f "$PROJECT_DIR/app/build.gradle" -o -f "$PROJECT_DIR/app/build.gradle.kts" || { echo 'Android app Gradle file missing'; exit 1; }
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+      - name: Apply Comic Studio patch
+        run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install SDK and emulator packages
+        timeout-minutes: 5
+        run: sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-35;google_apis;x86_64"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          gradle --no-daemon --stacktrace assembleDebug
+          APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' -print -quit)"
+          test -s "$APK"
+          mkdir -p "$GITHUB_WORKSPACE/apk-output"
+          cp "$APK" "$GITHUB_WORKSPACE/apk-output/app-debug.apk"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-APK-smoke-v2
+          path: apk-output/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run bounded emulator smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 8
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none
+          script: |
+            set -euo pipefail
+            adb start-server
+            adb wait-for-device
+            for i in $(seq 1 180); do
+              state="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [ "$state" = "1" ]; then break; fi
+              sleep 1
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" || { adb devices -l; adb logcat -d -t 500 > "$GITHUB_WORKSPACE/emulator-boot-failure.log" || true; exit 1; }
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            APK="$GITHUB_WORKSPACE/apk-output/app-debug.apk"
+            adb install -r "$APK"
+            PACKAGE="$(apkanalyzer manifest application-id "$APK")"
+            test -n "$PACKAGE"
+            ACTIVITY="$(apkanalyzer manifest launchable-activity "$APK")"
+            test -n "$ACTIVITY"
+            adb shell am force-stop "$PACKAGE" || true
+            adb shell am start -W -n "$PACKAGE/$ACTIVITY"
+            sleep 5
+            adb shell dumpsys activity activities | grep -F "$PACKAGE"
+            adb logcat -d -t 1200 > "$GITHUB_WORKSPACE/emulator-logcat.txt"
+            ! grep -E 'FATAL EXCEPTION|Process: .* has died' "$GITHUB_WORKSPACE/emulator-logcat.txt"
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-Emulator-Diagnostics-v2
+          path: |
+            emulator-boot-failure.log
+            emulator-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14

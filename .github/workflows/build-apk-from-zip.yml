@@ -267,12 +267,12 @@ jobs:
             # android-emulator-runner executes this script with /bin/sh, not bash.
             set -eu
             APK_PATH="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' -print -quit)"
-            if [[ -z "$APK_PATH" ]]; then
+            if [ -z "$APK_PATH" ]; then
               echo "APK file not found"
               exit 1
             fi
             APP_ID="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK_PATH" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
-            if [[ -z "$APP_ID" ]]; then
+            if [ -z "$APP_ID" ]; then
               echo "Could not determine Android application package name"
               exit 1
             fi
@@ -307,7 +307,7 @@ jobs:
             adb pull /sdcard/window.xml "$GITHUB_WORKSPACE/test-evidence/window.xml" >/dev/null
             adb shell screencap -p /sdcard/screen.png
             adb pull /sdcard/screen.png "$GITHUB_WORKSPACE/test-evidence/screen.png" >/dev/null
-            if [[ ! -s "$GITHUB_WORKSPACE/test-evidence/window.xml" ]] || ! grep -q "hierarchy" "$GITHUB_WORKSPACE/test-evidence/window.xml"; then
+            if [ ! -s "$GITHUB_WORKSPACE/test-evidence/window.xml" ] || ! grep -q "hierarchy" "$GITHUB_WORKSPACE/test-evidence/window.xml"; then
               echo "Could not capture the app's UI hierarchy"
               cat "$GITHUB_WORKSPACE/test-evidence/window.xml" || true
               exit 1

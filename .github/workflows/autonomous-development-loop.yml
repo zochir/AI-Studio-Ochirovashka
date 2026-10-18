@@ -1,0 +1,109 @@
+name: Autonomous development loop
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  actions: write
+
+concurrency:
+  group: autonomous-development-loop
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    # The schedule is intentionally gated: do not consume model/API quota until
+    # the repository owner explicitly enables it and configures a provider.
+    if: ${{ vars.AUTONOMOUS_AGENT_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Verify provider configuration
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_BASE: ${{ vars.AI_API_BASE }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+        run: |
+          set -euo pipefail
+          test -n "$AI_API_KEY" || { echo "::error::Add repository secret AI_API_KEY."; exit 1; }
+          test -n "$AI_API_BASE" || { echo "::error::Set repository variable AI_API_BASE to an OpenAI-compatible API endpoint."; exit 1; }
+          test -n "$AI_MODEL" || { echo "::error::Set repository variable AI_MODEL to the provider's model name."; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Python and Node
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Resume persistent agent branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin autonomous/mnn-diffusion >/dev/null 2>&1; then
+            git fetch origin autonomous/mnn-diffusion
+            git checkout -B autonomous/mnn-diffusion FETCH_HEAD
+          else
+            git checkout -b autonomous/mnn-diffusion
+          fi
+          git config user.name "AI Comic Studio Autonomous Agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install agent
+        run: python -m pip install --disable-pip-version-check aider-chat
+
+      - name: Run one bounded diagnose-edit-test cycle
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_BASE: ${{ vars.AI_API_BASE }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.AI_API_KEY }}
+          OPENAI_API_BASE: ${{ vars.AI_API_BASE }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: bash scripts/autonomous-agent-loop.sh
+
+      - name: Push reviewed candidate branch
+        if: success()
+        run: |
+          set -euo pipefail
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add .github scripts README.md THIRD_PARTY_NOTICES.md AUTONOMOUS_AGENT_SETUP.md
+            git commit -m "agent: advance autonomous development cycle"
+          fi
+          git push origin HEAD:autonomous/mnn-diffusion
+
+      - name: Trigger Android APK build and regression checks
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run mobile-apk-build.yml --ref autonomous/mnn-diffusion
+
+      - name: Open or refresh draft pull request
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          existing="$(gh pr list --head autonomous/mnn-diffusion --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing" ]]; then
+            gh pr create --draft --base main --head autonomous/mnn-diffusion \
+              --title "Autonomous development: on-device MNN Diffusion" \
+              --body "Automated candidate branch. Each run performs one bounded diagnose/edit/test cycle. Review all changes; actual on-device inference is not considered complete until demonstrated on hardware."
+          else
+            echo "Draft PR #$existing already tracks the persistent agent branch."
+          fi

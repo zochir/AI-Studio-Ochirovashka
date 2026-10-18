@@ -83,6 +83,7 @@ jobs:
           adb start-server
           EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
           test -x "$EMULATOR_BIN" || { echo "Emulator binary not found: $EMULATOR_BIN"; find "$ANDROID_HOME" -maxdepth 3 -type f -name emulator -print; exit 1; }
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
           "$EMULATOR_BIN" -accel-check > "$GITHUB_WORKSPACE/emulator-accel-check.log" 2>&1 || true
           if ! grep -qiE 'accel: 0|KVM.*not.*available|doesn.t have permissions to use KVM|CPU acceleration.*DISABLED' "$GITHUB_WORKSPACE/emulator-accel-check.log"; then
             echo "Hardware acceleration check did not report a known unavailable state; attempting emulator boot."

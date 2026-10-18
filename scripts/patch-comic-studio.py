@@ -142,14 +142,34 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен, workflow API-формата корректен и браузеру разрешён CORS.";}
   finally{$("comicGenerateLocal").disabled=false;}
  }
- function exportSvg(){
+ async function exportSvg(){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  const w=400,h=250,cols=2,rows=Math.ceil(panels.length/cols);
-  const body=panels.map((p,i)=>{const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;const image=p.imageUrl?'<text x="10" y="90" font-size="12">Иллюстрация создана; откройте приложение для просмотра</text>':'<text x="190" y="70" font-size="32" text-anchor="middle">🎨</text>';return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/><rect x="8" y="8" width="368" height="100" fill="#dbeafe"/>'+image+'<text x="14" y="134" font-size="17" font-weight="bold">'+escXml((i+1)+". "+p.title.slice(0,32))+'</text><foreignObject x="14" y="144" width="350" height="78"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px sans-serif">'+escXml(p.scene.slice(0,150))+'</div></foreignObject></g>';}).join("");
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(cols*w)+'" height="'+(rows*h)+'" viewBox="0 0 '+(cols*w)+' '+(rows*h)+'">'+body+'</svg>';
-  const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"})),a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  $("comicStatus").textContent="SVG-страница подготовлена. Внешние изображения не встраиваются в SVG-файл; для экспорта с картинками потребуется отдельная упаковка изображений.";
+  const imageData=async src=>{
+   if(!src)return "";
+   if(/^data:image\//i.test(src))return src;
+   try{
+    const response=await fetch(src);
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const blob=await response.blob();
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    let binary="";
+    for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+    const mime=blob.type||"image/png";
+    return "data:"+mime+";base64,"+btoa(binary);
+   }catch(e){return "";}
+  };
+  $("comicExport").disabled=true;
+  $("comicStatus").textContent="Подготовка экспорта: встраиваем доступные изображения…";
+  try{
+   const w=400,h=250,cols=2,rows=Math.ceil(panels.length/cols),images=await Promise.all(panels.map(p=>imageData(p.imageUrl)));
+   const body=panels.map((p,i)=>{const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;const art=images[i]?'<image x="8" y="8" width="368" height="100" preserveAspectRatio="xMidYMid slice" href="'+images[i]+'"/>':'<rect x="8" y="8" width="368" height="100" fill="#dbeafe"/><text x="192" y="65" font-size="26" text-anchor="middle">🎨</text>';return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+'<text x="14" y="134" font-size="17" font-weight="bold">'+escXml((i+1)+". "+p.title.slice(0,32))+'</text><foreignObject x="14" y="144" width="350" height="78"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px sans-serif">'+escXml(p.scene.slice(0,150))+(p.dialogue?'<br/><b>Реплика:</b> '+escXml(p.dialogue.slice(0,100)):"")+'</div></foreignObject></g>';}).join("");
+   const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(cols*w)+'" height="'+(rows*h)+'" viewBox="0 0 '+(cols*w)+' '+(rows*h)+'">'+body+'</svg>';
+   const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"})),a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   const embedded=images.filter(Boolean).length;
+   $("comicStatus").textContent="Экспорт SVG подготовлен. Встроено изображений: "+embedded+" из "+panels.length+". Если локальный сервер блокирует CORS, соответствующий кадр экспортирован как заглушка.";
+  }catch(e){$("comicStatus").textContent="Не удалось экспортировать комикс: "+e.message;}
+  finally{$("comicExport").disabled=false;}
  }
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",generateImages);

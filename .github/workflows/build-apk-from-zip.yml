@@ -54,6 +54,12 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Building project from: $PROJECT_DIR"
 
+      - name: Inject Comic Studio module
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/scripts/patch-comic-studio.py" "$PROJECT_DIR"
+
       - name: Validate app source structure
         shell: bash
         run: |

@@ -56,8 +56,8 @@ jobs:
             const jobSummary = jobs.data.jobs.map(job =>
               `- **${job.name}**: ${job.status}${job.conclusion ? ` (${job.conclusion})` : ""}` +
               (job.steps || []).filter(step => step.status === "in_progress")
-                .map(step => `\\n  - Running step: ${step.name}`).join("")
-            ).join("\\n");
+                .map(step => `\n  - Running step: ${step.name}`).join("")
+            ).join("\n");
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -74,6 +74,6 @@ jobs:
                 jobSummary || "No job details returned.",
                 "",
                 "This alert does not automatically restart the build, to avoid endless retry loops. Inspect the run and retry only after identifying a safe recovery."
-              ].join("\\n")
+              ].join("\n")
             });
             core.warning(`Created issue for stalled APK build #${run.run_number}.`);

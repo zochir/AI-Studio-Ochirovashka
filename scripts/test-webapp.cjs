@@ -3,8 +3,10 @@ const vm = require('vm');
 const assert = require('assert/strict');
 
 const html = fs.readFileSync(process.argv[2], 'utf8');
-const match = html.match(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/i);
-assert(match, 'inline script must exist');
+const scriptStart = html.indexOf('<script>');
+const scriptEnd = html.indexOf('</script>', scriptStart);
+assert(scriptStart >= 0 && scriptEnd > scriptStart, 'inline script must exist');
+const script = html.slice(scriptStart + '<script>'.length, scriptEnd);
 const elements = new Map();
 const defaults = {
   title: 'Новости Калмыкии', script: 'Тестовая новость', voice: '', rate: '1', rateValue: '1.0×',
@@ -103,7 +105,7 @@ const context = {
   setTimeout, clearTimeout, console, Blob, JSON, Number, String, Array, Math, Date, Promise
 };
 
-vm.runInNewContext(match[1], context, { timeout: 2000 });
+vm.runInNewContext(script, context, { timeout: 2000 });
 
 (async () => {
   assert.equal(calls.getVoices, 1, 'native voices queried');

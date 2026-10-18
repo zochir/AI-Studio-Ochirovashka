@@ -7,8 +7,6 @@ on:
       - '**.zip'
       - 'scripts/**'
       - '.github/workflows/android-emulator-smoke-v2.yml'
-  schedule:
-    - cron: '17 */6 * * *'
 permissions:
   contents: read
 concurrency:

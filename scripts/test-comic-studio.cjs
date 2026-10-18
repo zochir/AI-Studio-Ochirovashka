@@ -17,7 +17,8 @@ class Element {
   focus() { this.focused = true; }
 }
 const ids = ['comicStory', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
-  'comicGenerate', 'comicExport', 'comicStatus', 'comicPanels'];
+  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicGenerate', 'comicGenerateImages',
+  'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicStyle.value = 'Приключение';
@@ -31,11 +32,19 @@ const context = {
   URL: { createObjectURL: () => 'blob:comic-test', revokeObjectURL: () => {} },
   setTimeout: fn => fn(), clearTimeout,
   fetch: async (url, options) => {
-    assert.equal(url, 'https://api.test/v1/chat/completions');
-    assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
     const request = JSON.parse(options.body);
-    assert.equal(request.model, 'test-model');
-    return { ok: true, json: async () => ({ choices: [{ message: { content: '[{"title":"AI panel","scene":"AI scene","dialogue":"Hello"}]' } }] }) };
+    if (url === 'https://api.test/v1/chat/completions') {
+      assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
+      assert.equal(request.model, 'test-model');
+      return { ok: true, json: async () => ({ choices: [{ message: { content: '[{"title":"AI panel","scene":"AI scene","dialogue":"Hello"}]' } }] }) };
+    }
+    if (url === 'https://images.test/v1/images/generations') {
+      assert.equal(options.headers.Authorization, 'Bearer image-test-key');
+      assert.equal(request.model, 'image-test-model');
+      assert.match(request.prompt, /AI scene/);
+      return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
+    }
+    throw new Error('Unexpected network endpoint: ' + url);
   },
   JSON, String, Number, Array, Math, Promise
 };
@@ -59,6 +68,13 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerate.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicPanels.innerHTML, /AI panel/);
-  assert.match(els.comicStatus.textContent, /через ИИ API/);
-  console.log('PASS: local storyboard, four-panel render, SVG export, optional OpenAI-compatible script API');
+  assert.match(els.comicStatus.textContent, /Сценарий создан ИИ/);
+  els.comicImageEndpoint.value = 'https://images.test/v1/images/generations';
+  els.comicImageModel.value = 'image-test-model';
+  els.comicImageKey.value = 'image-test-key';
+  els.comicGenerateImages.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
+  assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  console.log('PASS: local storyboard, text API, image API request/response, rendered image, SVG export');
 })().catch(error => { console.error(error); process.exit(1); });

@@ -56,6 +56,17 @@ module = r"""
  const PROJECT_KEY="ai-studio-comic-project-v1";
  const names=["Завязка","Открытие","Развитие","Поворот","Кульминация","Развязка","Финал","Эпилог"];
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ async function fetchTimed(url,options,timeoutMs=45000){
+  const controller=typeof AbortController!=="undefined"?new AbortController():null;
+  const opts=Object.assign({},options||{});
+  if(controller)opts.signal=controller.signal;
+  let timer;
+  try{
+   const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{if(controller)controller.abort();reject(Error("Превышено время ожидания ответа ("+Math.round(timeoutMs/1000)+" с)."));},timeoutMs);});
+   return await Promise.race([fetch(url,opts),timeout]);
+  }finally{clearTimeout(timer);}
+ }
+
  function render(items){
   panels=items.map((p,i)=>({title:String(p.title||("Кадр "+(i+1)),),scene:String(p.scene||p.description||""),dialogue:String(p.dialogue||""),imageUrl:p.imageUrl||""}));
   $("comicPanels").innerHTML=panels.map((p,i)=>'<article class="comic-panel">'+(p.imageUrl?'<img class="comic-art" alt="Иллюстрация кадра '+(i+1)+'" src="'+esc(p.imageUrl)+'">':'<div class="comic-art comic-art-placeholder">Иллюстрация ещё не создана<br>Настройте генератор и нажмите «Сгенерировать изображения кадров»</div>')+'<h3>'+esc((i+1)+". "+p.title)+'</h3><p>'+esc(p.scene)+'</p>'+(p.dialogue?'<p><b>Реплика:</b> '+esc(p.dialogue)+'</p>':'')+'</article>').join("");
@@ -97,7 +108,7 @@ module = r"""
   try{
    if(endpoint){
     if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
-    const res=await fetch(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев и причинно-следственную связь."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Сюжет: "+story}]})});
+    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев и причинно-следственную связь."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Сюжет: "+story}]})});
     if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
     const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
     if(!raw)throw Error("В ответе текстового API нет сценария.");
@@ -121,7 +132,7 @@ module = r"""
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
     const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Panel "+(i+1)+" of "+panels.length+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Keep recurring characters visually consistent, use a clear composition and no captions or lettering.";
-    const res=await fetch(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
+    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
     const data=await res.json(),item=data.data&&data.data[0];
     if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
@@ -165,14 +176,14 @@ module = r"""
     $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
     const prompt="Create an actual narrative comic illustration, not an icon, logo, paint palette, easel, or placeholder. Depict the described scene. No text, letters, watermark, logo, paint palette, or easel. Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Keep character design consistent. No text or lettering.";
     const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
-    const res=await fetch(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
+    const res=await fetchTimed(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
     if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
     const queued=await res.json(),id=queued.prompt_id;
     if(!id)throw Error("ComfyUI не вернул prompt_id.");
     let history=null;
     for(let attempt=0;attempt<180;attempt++){
      await new Promise(resolve=>setTimeout(resolve,1000));
-     const hr=await fetch(base+"/history/"+encodeURIComponent(id));
+     const hr=await fetchTimed(base+"/history/"+encodeURIComponent(id),{},10000);
      if(!hr.ok)continue;
      const hd=await hr.json();history=hd[id]||hd[String(id)];
      if(history&&history.outputs)break;
@@ -196,7 +207,7 @@ module = r"""
    if(!src)return "";
    if(/^data:image\//i.test(src))return src;
    try{
-    const response=await fetch(src);
+    const response=await fetchTimed(src,{},15000);
     if(!response.ok)throw Error("HTTP "+response.status);
     const blob=await response.blob();
     const bytes=new Uint8Array(await blob.arrayBuffer());

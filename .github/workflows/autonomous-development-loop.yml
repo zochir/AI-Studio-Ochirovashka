@@ -9,7 +9,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: read
-  actions: read
+  actions: write
 
 concurrency:
   group: autonomous-development-loop
@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -n "$(git status --porcelain)" ]]; then
-            git add .github scripts README.md THIRD_PARTY_NOTICES.md
+            git add .github scripts README.md THIRD_PARTY_NOTICES.md AUTONOMOUS_AGENT_SETUP.md
             git commit -m "agent: advance autonomous development cycle"
           fi
           git push origin HEAD:autonomous/mnn-diffusion

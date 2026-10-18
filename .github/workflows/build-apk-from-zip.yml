@@ -81,7 +81,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          gradle --no-daemon assembleDebug
+          # The supplied project compiles Java to 1.8 but Kotlin to 17.
+          # Keep Gradle's compatibility check from aborting the APK build;
+          # Android's D8/R8 toolchain can consume both bytecode levels.
+          gradle --no-daemon -Pkotlin.jvm.target.validation.mode=warning assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

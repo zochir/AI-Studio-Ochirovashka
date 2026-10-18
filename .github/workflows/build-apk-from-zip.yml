@@ -245,7 +245,7 @@ jobs:
           cd "$PROJECT_DIR"
           # The supplied project compiles Java to 1.8 but Kotlin to 17.
           # Keep Gradle's compatibility check from aborting the APK build.
-          gradle --no-daemon -Pkotlin.jvm.target.validation.mode=warning assembleDebug
+          gradle --no-daemon --stacktrace -I "$GITHUB_WORKSPACE/scripts/ci-jvm-targets.gradle" -Pkotlin.jvm.target.validation.mode=warning assembleDebug
           test -n "$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
       - name: Upload APK immediately after build

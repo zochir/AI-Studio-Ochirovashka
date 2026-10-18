@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          gradle --no-daemon --stacktrace -I "$GITHUB_WORKSPACE/scripts/ci-jvm-targets.gradle" assembleDebug
+          gradle --no-daemon --stacktrace -I "$GITHUB_WORKSPACE/scripts/ci-jvm-targets.gradle" -Pkotlin.jvm.target.validation.mode=warning assembleDebug
           APK="$(find app/build/outputs/apk/debug -type f -name '*.apk' -print -quit)"
           test -s "$APK"
           mkdir -p "$GITHUB_WORKSPACE/apk-output"

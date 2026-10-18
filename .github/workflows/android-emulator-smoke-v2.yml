@@ -66,42 +66,49 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Run bounded emulator smoke test
-        uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 8
-        with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          force-avd-creation: true
-          emulator-boot-timeout: 360
-          disable-animations: true
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -no-snapshot-load -gpu swiftshader_indirect -camera-back none -memory 1536 -cores 2
-          script: |
-            set -euo pipefail
-            adb start-server
-            adb wait-for-device
-            for i in $(seq 1 180); do
-              state="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              if [ "$state" = "1" ]; then break; fi
-              sleep 1
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" || { adb devices -l; adb logcat -d -t 500 > "$GITHUB_WORKSPACE/emulator-boot-failure.log" || true; exit 1; }
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-            APK="$GITHUB_WORKSPACE/apk-output/app-debug.apk"
-            adb install -r "$APK"
-            PACKAGE="$(apkanalyzer manifest application-id "$APK")"
-            test -n "$PACKAGE"
-            ACTIVITY="$(apkanalyzer manifest launchable-activity "$APK")"
-            test -n "$ACTIVITY"
-            adb shell am force-stop "$PACKAGE" || true
-            adb shell am start -W -n "$PACKAGE/$ACTIVITY"
-            sleep 5
-            adb shell dumpsys activity activities | grep -F "$PACKAGE"
-            adb logcat -d -t 1200 > "$GITHUB_WORKSPACE/emulator-logcat.txt"
-            ! grep -E 'FATAL EXCEPTION|Process: .* has died' "$GITHUB_WORKSPACE/emulator-logcat.txt"
+        shell: bash
+        run: |
+          set -euo pipefail
+          AVD_NAME=ochiro-ci-api30
+          echo "no" | avdmanager create avd --force -n "$AVD_NAME" -k "system-images;android-30;google_apis;x86_64" -d "pixel_2"
+          adb start-server
+          emulator -avd "$AVD_NAME" -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -no-snapshot-load -no-metrics -gpu swiftshader_indirect -memory 1536 -cores 2 -camera-back none > "$GITHUB_WORKSPACE/emulator-console.log" 2>&1 &
+          EMULATOR_PID=$!
+          BOOTED=0
+          for i in $(seq 1 360); do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo "Emulator process exited before Android finished booting"
+              break
+            fi
+            STATE="$(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            if [ "$STATE" = "1" ]; then BOOTED=1; break; fi
+            sleep 1
+          done
+          if [ "$BOOTED" != "1" ]; then
+            echo "Android emulator failed to boot within 360 seconds"
+            adb devices -l > "$GITHUB_WORKSPACE/emulator-devices.txt" 2>&1 || true
+            adb -s emulator-5554 logcat -b all -d -t 1200 > "$GITHUB_WORKSPACE/emulator-boot-failure.log" 2>&1 || true
+            tail -n 300 "$GITHUB_WORKSPACE/emulator-console.log" || true
+            exit 1
+          fi
+          adb -s emulator-5554 shell settings put global window_animation_scale 0
+          adb -s emulator-5554 shell settings put global transition_animation_scale 0
+          adb -s emulator-5554 shell settings put global animator_duration_scale 0
+          APK="$GITHUB_WORKSPACE/apk-output/app-debug.apk"
+          adb -s emulator-5554 install -r "$APK"
+          PACKAGE="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+          ACTIVITY="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | sed -n "s/^launchable-activity: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+          test -n "$PACKAGE" || { echo "Could not determine APK package name"; exit 1; }
+          test -n "$ACTIVITY" || { echo "Could not determine APK launch activity"; exit 1; }
+          adb -s emulator-5554 shell am force-stop "$PACKAGE" || true
+          adb -s emulator-5554 shell am start -W -n "$PACKAGE/$ACTIVITY"
+          sleep 5
+          adb -s emulator-5554 shell dumpsys activity activities > "$GITHUB_WORKSPACE/emulator-activities.txt"
+          grep -F "$PACKAGE" "$GITHUB_WORKSPACE/emulator-activities.txt"
+          adb -s emulator-5554 logcat -b all -d -t 2000 > "$GITHUB_WORKSPACE/emulator-logcat.txt"
+          ! grep -E 'FATAL EXCEPTION|Fatal signal|Process: .* has died' "$GITHUB_WORKSPACE/emulator-logcat.txt"
+          echo "SMOKE TEST PASSED: APK installed and launcher activity started without a fatal crash"
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@v4

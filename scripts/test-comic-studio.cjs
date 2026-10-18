@@ -18,20 +18,24 @@ class Element {
 }
 const ids = ['comicStory', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
-  'comicExport', 'comicStatus', 'comicPanels'];
+  'comicSave', 'comicLoad', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicLocalEndpoint.value = 'http://comfy.test:8188';
 els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
 els.comicStyle.value = 'Приключение';
 const anchors = [];
+const blobs = [];
+const saved = new Map();
 const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
   createElement: tag => { const el = new Element(tag); anchors.push(el); return el; }
 };
 const context = {
   document, console, Blob,
-  URL: { createObjectURL: () => 'blob:comic-test', revokeObjectURL: () => {} },
+  URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
+  localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
+  btoa: value => Buffer.from(value, 'binary').toString('base64'),
   setTimeout: fn => fn(), clearTimeout,
   fetch: async (url, options) => {
     const request = options && options.body ? JSON.parse(options.body) : {};
@@ -85,6 +89,18 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  await els.comicExport.click();
+  const exportedSvg = await blobs[blobs.length - 1].text();
+  assert.match(exportedSvg, /<image[^>]+href="data:image\/png;base64,ZmFrZQ=="/);
+  assert.match(exportedSvg, /Hello/);
+  els.comicSave.click();
+  assert.match(els.comicStatus.textContent, /Проект сохранён/);
+  els.comicStory.value = 'перезаписанный сюжет';
+  els.comicPanels.innerHTML = '';
+  els.comicLoad.click();
+  assert.equal(els.comicStory.value, 'Героиня отправляется в горы. Она замечает загадочный свет. Находит древнюю дверь. Дверь открывается.');
+  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
+  assert.match(els.comicStatus.textContent, /Проект загружен/);
   els.comicGenerateLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   console.log('LOCAL STATUS:', els.comicStatus.textContent);

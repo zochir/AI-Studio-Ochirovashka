@@ -87,6 +87,12 @@ jobs:
           fi
           git push origin HEAD:autonomous/mnn-diffusion
 
+      - name: Trigger Android APK build and regression checks
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run mobile-apk-build.yml --ref autonomous/mnn-diffusion
+
       - name: Open or refresh draft pull request
         if: success()
         env:

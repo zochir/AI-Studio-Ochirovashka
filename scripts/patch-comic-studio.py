@@ -16,13 +16,13 @@ module = r"""
 #comicLab button:disabled{opacity:.55}#comicLab .comic-note{font-size:.9em;line-height:1.45;opacity:.82}
 #comicLab .comic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
 #comicLab .comic-panel{border:2px solid #172033;border-radius:8px;background:#fff;color:#172033;overflow:hidden;box-shadow:3px 4px 0 #172033}
-#comicLab .comic-art{width:100%;aspect-ratio:1/1;display:grid;place-items:center;background:#dbeafe;font-size:40px;object-fit:cover}
+#comicLab .comic-art{width:100%;aspect-ratio:1/1;display:grid;place-items:center;background:#e2e8f0;color:#334155;font-size:15px;text-align:center;padding:18px;object-fit:cover}#comicLab .comic-art-placeholder{font-weight:650;line-height:1.5}
 #comicLab .comic-panel h3,#comicLab .comic-panel p{margin:10px;line-height:1.4}
 </style>
 <section id="comicLab" aria-labelledby="comicLabTitle">
 <h2 id="comicLabTitle">Комикс-студия</h2>
 <p class="comic-note" style="margin-top:-6px;font-weight:650">Разработчики: Очир Зулаев и Алиса</p>
-<p class="comic-note">Сначала создайте раскадровку. Для настоящих изображений подключите совместимый с OpenAI Images API сервис. Ключ используется только в текущей сессии; для публичного приложения безопаснее обращаться к API через собственный сервер. Провайдер может блокировать прямые запросы из WebView через CORS.</p>
+<p class="comic-note">Важно: «Создать раскадровку» формирует только текст кадров — это ещё не генерация рисунков. Серый блок означает, что изображение не создано. Чтобы получить реальные иллюстрации бесплатно локально, настройте ComfyUI и вставьте его API workflow; альтернативно укажите совместимый Images API. Ключ используется только в текущей сессии; для публичного приложения безопаснее обращаться к API через собственный сервер. Провайдер может блокировать прямые запросы из WebView через CORS.</p>
 <label for="comicStory">Идея или сюжет</label><textarea id="comicStory" rows="4" placeholder="Опишите героев, место действия и события"></textarea>
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>
 <div><label for="comicStyle">Визуальный стиль</label><select id="comicStyle"><option>Комикс с чёткими контурами</option><option>Манга</option><option>Акварельное фэнтези</option><option>Научная фантастика</option><option>Нуар</option></select></div></div>
@@ -58,7 +58,7 @@ module = r"""
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  function render(items){
   panels=items.map((p,i)=>({title:String(p.title||("Кадр "+(i+1)),),scene:String(p.scene||p.description||""),dialogue:String(p.dialogue||""),imageUrl:p.imageUrl||""}));
-  $("comicPanels").innerHTML=panels.map((p,i)=>'<article class="comic-panel">'+(p.imageUrl?'<img class="comic-art" alt="Иллюстрация кадра '+(i+1)+'" src="'+esc(p.imageUrl)+'">':'<div class="comic-art" aria-hidden="true">🎨</div>')+'<h3>'+esc((i+1)+". "+p.title)+'</h3><p>'+esc(p.scene)+'</p>'+(p.dialogue?'<p><b>Реплика:</b> '+esc(p.dialogue)+'</p>':'')+'</article>').join("");
+  $("comicPanels").innerHTML=panels.map((p,i)=>'<article class="comic-panel">'+(p.imageUrl?'<img class="comic-art" alt="Иллюстрация кадра '+(i+1)+'" src="'+esc(p.imageUrl)+'">':'<div class="comic-art comic-art-placeholder">Иллюстрация ещё не создана<br>Настройте генератор и нажмите «Сгенерировать изображения кадров»</div>')+'<h3>'+esc((i+1)+". "+p.title)+'</h3><p>'+esc(p.scene)+'</p>'+(p.dialogue?'<p><b>Реплика:</b> '+esc(p.dialogue)+'</p>':'')+'</article>').join("");
  }
  function saveProject(){
   try{
@@ -114,7 +114,7 @@ module = r"""
    let completed=0;
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create one finished comic panel illustration. Visual style: "+$("comicStyle").value+". Panel "+(i+1)+" of "+panels.length+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Keep recurring characters visually consistent, use a clear composition and no captions or lettering.";
+    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Panel "+(i+1)+" of "+panels.length+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Keep recurring characters visually consistent, use a clear composition and no captions or lettering.";
     const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
     const data=await res.json(),item=data.data&&data.data[0];
@@ -137,7 +137,7 @@ module = r"""
   try{
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
-    const prompt="Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Keep character design consistent. No text or lettering.";
+    const prompt="Create an actual narrative comic illustration, not an icon, logo, paint palette, easel, or placeholder. Depict the described scene. No text, letters, watermark, logo, paint palette, or easel. Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Keep character design consistent. No text or lettering.";
     const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
     const res=await fetch(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
     if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
@@ -184,7 +184,7 @@ module = r"""
   $("comicStatus").textContent="Подготовка экспорта: встраиваем доступные изображения…";
   try{
    const w=400,h=250,cols=2,rows=Math.ceil(panels.length/cols),images=await Promise.all(panels.map(p=>imageData(p.imageUrl)));
-   const body=panels.map((p,i)=>{const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;const art=images[i]?'<image x="8" y="8" width="368" height="100" preserveAspectRatio="xMidYMid slice" href="'+images[i]+'"/>':'<rect x="8" y="8" width="368" height="100" fill="#dbeafe"/><text x="192" y="65" font-size="26" text-anchor="middle">🎨</text>';return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+'<text x="14" y="134" font-size="17" font-weight="bold">'+escXml((i+1)+". "+p.title.slice(0,32))+'</text><foreignObject x="14" y="144" width="350" height="78"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px sans-serif">'+escXml(p.scene.slice(0,150))+(p.dialogue?'<br/><b>Реплика:</b> '+escXml(p.dialogue.slice(0,100)):"")+'</div></foreignObject></g>';}).join("");
+   const body=panels.map((p,i)=>{const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;const art=images[i]?'<image x="8" y="8" width="368" height="100" preserveAspectRatio="xMidYMid slice" href="'+images[i]+'"/>':'<rect x="8" y="8" width="368" height="100" fill="#e2e8f0"/><text x="192" y="48" font-size="15" text-anchor="middle" fill="#334155">Иллюстрация не создана</text>';return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+'<text x="14" y="134" font-size="17" font-weight="bold">'+escXml((i+1)+". "+p.title.slice(0,32))+'</text><foreignObject x="14" y="144" width="350" height="78"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px sans-serif">'+escXml(p.scene.slice(0,150))+(p.dialogue?'<br/><b>Реплика:</b> '+escXml(p.dialogue.slice(0,100)):"")+'</div></foreignObject></g>';}).join("");
    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(cols*w)+'" height="'+(rows*h)+'" viewBox="0 0 '+(cols*w)+' '+(rows*h)+'">'+body+'</svg>';
    const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"})),a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    const embedded=images.filter(Boolean).length;

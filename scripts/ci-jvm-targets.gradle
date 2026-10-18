@@ -1,0 +1,16 @@
+// CI-only compatibility alignment: the bundled Android project targets Java 8
+// while its Kotlin plugin defaults to JVM 17. Align both compilers for a
+// reproducible debug build without changing the source archive.
+allprojects {
+    afterEvaluate {
+        tasks.configureEach { task ->
+            if (task instanceof org.gradle.api.tasks.compile.JavaCompile) {
+                task.sourceCompatibility = '17'
+                task.targetCompatibility = '17'
+            }
+            if (task.class.name.contains('KotlinCompile') && task.hasProperty('kotlinOptions')) {
+                task.property('kotlinOptions').jvmTarget = '17'
+            }
+        }
+    }
+}

@@ -264,7 +264,8 @@ jobs:
           arch: x86_64
           profile: pixel_2
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this script with /bin/sh, not bash.
+            set -eu
             APK_PATH="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' -print -quit)"
             if [[ -z "$APK_PATH" ]]; then
               echo "APK file not found"

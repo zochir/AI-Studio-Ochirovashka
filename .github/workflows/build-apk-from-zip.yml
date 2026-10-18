@@ -134,6 +134,12 @@ jobs:
           set -euo pipefail
           node "$GITHUB_WORKSPACE/scripts/test-webapp.cjs" "$PROJECT_DIR/app/src/main/assets/index.html"
 
+      - name: Test Comic Studio local generation and export
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$GITHUB_WORKSPACE/scripts/test-comic-studio.cjs" "$PROJECT_DIR/app/src/main/assets/index.html"
+
       - name: Feature-marker diagnostics
         shell: bash
         run: |

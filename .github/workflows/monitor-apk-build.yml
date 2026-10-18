@@ -18,7 +18,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const workflowPath = ".github/workflows/build-apk-from-zip.yml";
+            const workflowPath = ".github/workflows/mobile-apk-build.yml";
             const runs = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,

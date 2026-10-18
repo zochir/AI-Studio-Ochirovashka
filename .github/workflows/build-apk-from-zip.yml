@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "*.zip"
+      - "scripts/**"
       - ".github/workflows/build-apk-from-zip.yml"
 
 permissions:

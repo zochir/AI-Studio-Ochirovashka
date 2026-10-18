@@ -34,6 +34,12 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
       - name: Apply Comic Studio patch
         run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
+      - name: Set up Node.js for Comic Studio tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run Comic Studio mocked API tests
+        run: node scripts/test-comic-studio.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

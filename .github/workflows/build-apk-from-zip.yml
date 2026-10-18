@@ -255,6 +255,263 @@ jobs:
           path: extracted/**/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      # Emulator verification runs independently in android-emulator-smoke-v2.yml so APK builds and artifacts finish even if the hosted emulator stalls.
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - "scripts/**"
+      - ".github/workflows/build-apk-from-zip.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and extract project ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p extracted
+          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+          if [[ -z "$ZIP_FILE" ]]; then
+            echo "Project ZIP not found in repository root"
+            exit 1
+          fi
+          unzip -q "$ZIP_FILE" -d extracted
+
+          PROJECT_DIR=""
+          while IFS= read -r -d '' file; do
+            PROJECT_DIR="$(dirname "$file")"
+            break
+          done < <(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print0)
+
+          if [[ -z "$PROJECT_DIR" ]]; then
+            echo "Neither settings.gradle nor settings.gradle.kts was found in ZIP"
+            find extracted -maxdepth 5 -type f | head -200
+            exit 1
+          fi
+          if [[ ! -f "$PROJECT_DIR/build.gradle" && ! -f "$PROJECT_DIR/build.gradle.kts" ]]; then
+            echo "Root build.gradle or build.gradle.kts not found in: $PROJECT_DIR"
+            exit 1
+          fi
+          if [[ ! -d "$PROJECT_DIR/app" ]]; then
+            echo "Android app module directory not found in: $PROJECT_DIR"
+            find "$PROJECT_DIR" -maxdepth 3 -type f | head -200
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Building project from: $PROJECT_DIR"
+
+      - name: Inject Comic Studio module
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/scripts/patch-comic-studio.py" "$PROJECT_DIR"
+
+      - name: Validate app source structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          MANIFEST="$PROJECT_DIR/app/src/main/AndroidManifest.xml"
+
+          test -s "$HTML" || { echo "Web UI asset missing or empty: $HTML"; exit 1; }
+          test -s "$ACTIVITY" || { echo "MainActivity source missing or empty: $ACTIVITY"; exit 1; }
+          test -s "$MANIFEST" || { echo "Android manifest missing or empty: $MANIFEST"; exit 1; }
+
+          grep -Eiq '<html([[:space:]>])' "$HTML" || { echo "Web UI does not contain an HTML root element"; exit 1; }
+          grep -Eiq '<script([[:space:]>])' "$HTML" || { echo "Web UI has no JavaScript block"; exit 1; }
+          grep -Eiq '<(button|input|textarea|select)([[:space:]>])' "$HTML" || { echo "Web UI has no detectable interactive controls"; exit 1; }
+          grep -Eq 'WebView|loadUrl' "$ACTIVITY" || { echo "MainActivity does not appear to load a WebView"; exit 1; }
+          grep -Eiq 'android.intent.action.MAIN|android.intent.category.LAUNCHER' "$MANIFEST" || { echo "Manifest has no launcher activity declaration"; exit 1; }
+
+          echo "SOURCE STRUCTURE CHECK PASSED: HTML/JavaScript UI, interactive controls, WebView host, launcher manifest"
+          mkdir -p test-evidence/source-snapshot
+          cp "$HTML" test-evidence/source-snapshot/index.html
+          cp "$ACTIVITY" test-evidence/source-snapshot/MainActivity.kt
+          cp "$MANIFEST" test-evidence/source-snapshot/AndroidManifest.xml
+
+      - name: Check embedded JavaScript syntax and report feature markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          mkdir -p /tmp/inline-js
+          python3 - "$HTML" /tmp/inline-js <<'PY'
+          import html.parser, pathlib, sys
+          source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          out = pathlib.Path(sys.argv[2])
+          class Scripts(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.active = False
+                  self.external = False
+                  self.parts = []
+                  self.scripts = []
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower() == "script":
+                      self.active = True
+                      self.external = any(k.lower() == "src" for k, _ in attrs)
+                      self.parts = []
+              def handle_data(self, data):
+                  if self.active and not self.external:
+                      self.parts.append(data)
+              def handle_endtag(self, tag):
+                  if tag.lower() == "script" and self.active:
+                      if not self.external and "".join(self.parts).strip():
+                          self.scripts.append("".join(self.parts))
+                      self.active = False
+          parser = Scripts()
+          parser.feed(source)
+          if not parser.scripts:
+              raise SystemExit("No inline JavaScript found to syntax-check")
+          for i, script in enumerate(parser.scripts, 1):
+              (out / f"script-{i}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(parser.scripts)} inline JavaScript block(s) for syntax validation")
+          PY
+          for script in /tmp/inline-js/*.js; do
+            node --check "$script"
+          done
+          echo "JAVASCRIPT SYNTAX CHECK PASSED"
+
+      - name: Test editor interactions with mocked Android TTS
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$GITHUB_WORKSPACE/scripts/test-webapp.cjs" "$PROJECT_DIR/app/src/main/assets/index.html"
+
+      - name: Test Comic Studio local generation and export
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$GITHUB_WORKSPACE/scripts/test-comic-studio.cjs" "$PROJECT_DIR/app/src/main/assets/index.html"
+
+      - name: Feature-marker diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          echo "Feature-marker diagnostics (presence is not proof of runtime functionality):"
+          if grep -Eiq 'comic|комикс|кадр|panel' "$HTML"; then echo "COMIC_UI_MARKERS=found"; else echo "COMIC_UI_MARKERS=not-found"; fi
+          if grep -Eiq 'TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts' "$HTML" "$ACTIVITY"; then echo "TTS_MARKERS=found"; else echo "TTS_MARKERS=not-found"; fi
+          if grep -Eiq 'fetch[[:space:]]*\\(|XMLHttpRequest|api[_/-]?key|gemini|openai|ollama|нейросет|искусственн.*интеллект' "$HTML" "$ACTIVITY"; then echo "AI_API_MARKERS=found"; else echo "AI_API_MARKERS=not-found"; fi
+
+      - name: Audit UI controls and implemented feature hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-evidence
+          python3 - "$PROJECT_DIR/app/src/main/assets/index.html" "$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt" test-evidence/source-audit.md <<'PY'
+          import html.parser, pathlib, re, sys
+          html_path, activity_path, report_path = map(pathlib.Path, sys.argv[1:])
+          source = html_path.read_text(encoding="utf-8")
+          activity = activity_path.read_text(encoding="utf-8")
+          class Audit(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.controls = []
+                  self.current = None
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag.lower() in {"button", "input", "textarea", "select"}:
+                      self.current = {"tag": tag.lower(), "id": attrs.get("id", ""), "type": attrs.get("type", ""), "text": "", "onclick": attrs.get("onclick", "")}
+                      self.controls.append(self.current)
+                  elif tag.lower() == "script":
+                      self.current = None
+              def handle_data(self, data):
+                  if self.current is not None:
+                      self.current["text"] += data.strip() + " "
+              def handle_endtag(self, tag):
+                  if self.current is not None and tag.lower() == self.current["tag"]:
+                      self.current = None
+          parser = Audit()
+          parser.feed(source)
+          functions = sorted(set(re.findall(r"\bfunction\s+([A-Za-z_$][\w$]*)\s*\(", source)))
+          functions += sorted(set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>", source)))
+          markers = {
+              "comic/generation terminology": bool(re.search(r"comic|комикс|кадр|panel|generate", source, re.I)),
+              "text-to-speech markers": bool(re.search(r"TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts", source + activity, re.I)),
+              "network/API markers": bool(re.search(r"fetch\s*\(|XMLHttpRequest|https?://|api[_/-]?key|gemini|openai|ollama", source + activity, re.I)),
+              "WebView host": bool(re.search(r"WebView|loadUrl", activity)),
+          }
+          script_count = len(re.findall(r"<script(?:\s[^>]*)?>", source, re.I))
+          lines = ["# Automated source audit", "", f"- HTML asset bytes: {html_path.stat().st_size}", f"- Inline script blocks: {script_count}", f"- Interactive controls: {len(parser.controls)}", f"- Named JavaScript functions detected: {len(set(functions))}", "", "## Feature marker scan", ""]
+          lines += [f"- {name}: {'found' if found else 'not found'}" for name, found in markers.items()]
+          lines += ["", "## Interactive controls", ""]
+          for c in parser.controls:
+              label = (c["text"] or "").strip().replace("|", "\\|")[:100]
+              lines.append(f"- {c['tag']} id={c['id']} type={c['type']} label={label} onclick={c['onclick'][:120]}")
+          lines += ["", "## JavaScript function names", ""]
+          lines += [f"- {name}" for name in sorted(set(functions))]
+          lines += ["", "This is static source analysis. Marker presence does not establish that a feature works at runtime."]
+          report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+
+      - name: Upload source audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-Source-Audit
+          path: test-evidence/
+          if-no-files-found: error
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under ANDROID_HOME=$ANDROID_HOME"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          # The supplied project compiles Java to 1.8 but Kotlin to 17.
+          # Keep Gradle's compatibility check from aborting the APK build.
+          gradle --no-daemon --stacktrace -I "$GITHUB_WORKSPACE/scripts/ci-jvm-targets.gradle" -Pkotlin.jvm.target.validation.mode=warning assembleDebug
+          test -n "$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+      - name: Upload APK immediately after build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-APK
+          path: extracted/**/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
       - name: Smoke-test APK in Android emulator
         timeout-minutes: 18
         uses: reactivecircus/android-emulator-runner@v2

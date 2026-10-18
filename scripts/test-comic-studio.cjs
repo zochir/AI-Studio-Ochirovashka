@@ -55,7 +55,7 @@ const context = {
     }
     throw new Error('Unexpected network endpoint: ' + url);
   },
-  JSON, String, Number, Array, Math, Promise
+  JSON, String, Number, Array, Math, Promise, URLSearchParams
 };
 vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
 

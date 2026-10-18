@@ -107,7 +107,7 @@ module = r"""
   finally{$("comicGenerateImages").disabled=false;}
  }
  async function generateLocalImages(){
-  const base=$("comicLocalEndpoint").value.trim().replace(/\\/$/,""),workflowText=$("comicWorkflow").value.trim();
+  const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,""),workflowText=$("comicWorkflow").value.trim();
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   if(!base||!workflowText){$("comicStatus").textContent="Укажите адрес ComfyUI и API workflow JSON.";return;}
   let template;

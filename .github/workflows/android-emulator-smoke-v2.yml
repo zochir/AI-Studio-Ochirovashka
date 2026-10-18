@@ -71,7 +71,15 @@ jobs:
         run: |
           set -euo pipefail
           AVD_NAME=ochiro-ci-api30
-          echo "no" | avdmanager create avd --force -n "$AVD_NAME" -k "system-images;android-30;google_apis;x86_64" -d "pixel_2"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          test -x "$AVDMANAGER" || { echo "avdmanager not found: $AVDMANAGER"; exit 1; }
+          printf 'no\n' | "$AVDMANAGER" create avd --force -n "$AVD_NAME" -k "system-images;android-30;google_apis;x86_64" -d "pixel_2" > "$GITHUB_WORKSPACE/avdmanager-create.log" 2>&1
+          cat "$GITHUB_WORKSPACE/avdmanager-create.log"
+          "$AVDMANAGER" list avd > "$GITHUB_WORKSPACE/avdmanager-list.log" 2>&1
+          cat "$GITHUB_WORKSPACE/avdmanager-list.log"
+          test -s "$ANDROID_AVD_HOME/$AVD_NAME.ini" || { echo "AVD ini was not created in $ANDROID_AVD_HOME"; find "$HOME/.android" -maxdepth 4 -type f -print || true; exit 1; }
           adb start-server
           EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
           test -x "$EMULATOR_BIN" || { echo "Emulator binary not found: $EMULATOR_BIN"; find "$ANDROID_HOME" -maxdepth 3 -type f -name emulator -print; exit 1; }
@@ -117,6 +125,8 @@ jobs:
         with:
           name: AI-Studio-Ochirovashka-Emulator-Diagnostics-v2
           path: |
+            avdmanager-create.log
+            avdmanager-list.log
             emulator-console.log
             emulator-devices.txt
             emulator-boot-failure.log

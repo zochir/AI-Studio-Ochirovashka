@@ -66,7 +66,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerate.click();
   assert.equal((els.comicPanels.innerHTML.match(/<article/g) || []).length, 4);
   assert.match(els.comicStatus.textContent, /локальн/);
-  els.comicExport.click();
+  await els.comicExport.click();
   assert.equal(anchors.length, 1);
   assert.equal(anchors[0].download, 'comic-storyboard.svg');
   assert.equal(anchors[0].clicked, true);

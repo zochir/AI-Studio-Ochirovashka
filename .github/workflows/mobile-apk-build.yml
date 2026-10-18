@@ -47,6 +47,22 @@ jobs:
           set -euo pipefail
           if [[ -d android-overlay ]]; then cp -a android-overlay/. "$PROJECT_DIR"/; echo "Applied tracked Android source overlay."; else echo "No Android source overlay files to apply."; fi
 
+      - name: Inventory Android native integration points
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "--- Android manifests ---"
+          while IFS= read -r manifest; do
+            echo "### $manifest"
+            sed -n '1,180p' "$manifest"
+          done < <(find "$PROJECT_DIR/app/src/main" -type f -name AndroidManifest.xml)
+          echo "--- Gradle SDK, NDK, ABI and native build declarations ---"
+          grep -RInE 'namespace|applicationId|minSdk|targetSdk|compileSdk|ndkVersion|abiFilters|externalNativeBuild|cmake' "$PROJECT_DIR" --include='*.gradle' --include='*.gradle.kts' --include='gradle.properties' --exclude-dir=.gradle || true
+          echo "--- Existing Java/Kotlin/C++ source paths ---"
+          find "$PROJECT_DIR/app/src/main" -type f | grep -E '\.(kt|java|cpp|c|h|hpp|so)$' | sort || true
+          echo "--- Existing JNI and native library references ---"
+          grep -RInE 'System.loadLibrary|external fun|JNIEXPORT|lib[A-Za-z0-9_]+\.so' "$PROJECT_DIR/app/src/main" --include='*.kt' --include='*.java' --include='*.cpp' --include='*.h' --include='*.xml' || true
+
       - name: Patch Comic Studio module
         run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
 

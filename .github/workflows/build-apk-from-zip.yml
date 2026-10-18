@@ -256,13 +256,17 @@ jobs:
           if-no-files-found: error
 
       - name: Smoke-test APK in Android emulator
-        timeout-minutes: 15
+        timeout-minutes: 18
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          force-avd-creation: true
+          emulator-boot-timeout: 360
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -no-metrics
           script: |
             # android-emulator-runner executes this script with /bin/sh, not bash.
             set -eu

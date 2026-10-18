@@ -72,6 +72,10 @@ jobs:
           grep -Eiq 'android.intent.action.MAIN|android.intent.category.LAUNCHER' "$MANIFEST" || { echo "Manifest has no launcher activity declaration"; exit 1; }
 
           echo "SOURCE STRUCTURE CHECK PASSED: HTML/JavaScript UI, interactive controls, WebView host, launcher manifest"
+          mkdir -p test-evidence/source-snapshot
+          cp "$HTML" test-evidence/source-snapshot/index.html
+          cp "$ACTIVITY" test-evidence/source-snapshot/MainActivity.kt
+          cp "$MANIFEST" test-evidence/source-snapshot/AndroidManifest.xml
 
       - name: Check embedded JavaScript syntax and report feature markers
         shell: bash

@@ -40,12 +40,12 @@ const context = {
   fetch: async (url, options) => {
     const request = options && options.body ? JSON.parse(options.body) : {};
     if (url === 'https://api.test/v1/chat/completions') {
-      assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
+      if (options.headers.Authorization) assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
       assert.equal(request.model, 'test-model');
       return { ok: true, json: async () => ({ choices: [{ message: { content: '[{"title":"AI panel","scene":"AI scene","dialogue":"Hello"}]' } }] }) };
     }
     if (url === 'https://images.test/v1/images/generations') {
-      assert.equal(options.headers.Authorization, 'Bearer image-test-key');
+      if (options.headers.Authorization) assert.equal(options.headers.Authorization, 'Bearer image-test-key');
       assert.equal(request.model, 'image-test-model');
       assert.match(request.prompt, /AI scene/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
@@ -116,5 +116,14 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   console.log('LOCAL STATUS:', els.comicStatus.textContent);
   assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/);
   assert.match(els.comicStatus.textContent, /ComfyUI завершил генерацию/);
-  console.log('PASS: local storyboard, text API, image API, ComfyUI integration, SVG export');
+  // Local OpenAI-compatible endpoints may not require API keys.
+  els.comicKey.value = '';
+  els.comicGenerate.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicStatus.textContent, /Сценарий создан ИИ/);
+  els.comicImageKey.value = '';
+  els.comicGenerateImages.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  console.log('PASS: local storyboard, keyed/keyless text API, keyed/keyless image API, ComfyUI integration, SVG export');
 })().catch(error => { console.error(error); process.exit(1); });

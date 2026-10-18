@@ -119,7 +119,27 @@ jobs:
               echo "Crash signature found in Android logcat"
               exit 1
             fi
-            echo "SMOKE TEST PASSED: APK installed and app process remained alive for 10 seconds"
+
+            # Verify that the launched app is the foreground/resumed activity,
+            # not merely a process that remains alive in the background.
+            adb shell dumpsys activity activities > /tmp/activities.txt
+            if ! grep -F "$APP_ID" /tmp/activities.txt | grep -E "mResumedActivity|topResumedActivity|Resumed"; then
+              echo "App is not confirmed as the resumed foreground activity"
+              cat /tmp/activities.txt
+              exit 1
+            fi
+
+            # Save a UI hierarchy snapshot for debugging and assert that Android
+            # can inspect a non-empty app window after launch.
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb shell cat /sdcard/window.xml > /tmp/window.xml
+            if [[ ! -s /tmp/window.xml ]] || ! grep -q "hierarchy" /tmp/window.xml; then
+              echo "Could not capture the app's UI hierarchy"
+              cat /tmp/window.xml || true
+              exit 1
+            fi
+            echo "UI hierarchy captured successfully"
+            echo "SMOKE TEST PASSED: APK installed, foreground activity confirmed, UI hierarchy captured, no fatal crash detected"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

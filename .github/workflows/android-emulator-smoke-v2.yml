@@ -84,6 +84,19 @@ jobs:
           EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
           test -x "$EMULATOR_BIN" || { echo "Emulator binary not found: $EMULATOR_BIN"; find "$ANDROID_HOME" -maxdepth 3 -type f -name emulator -print; exit 1; }
           "$EMULATOR_BIN" -accel-check > "$GITHUB_WORKSPACE/emulator-accel-check.log" 2>&1 || true
+          if ! grep -qiE 'accel: 0|KVM.*not.*available|doesn.t have permissions to use KVM|CPU acceleration.*DISABLED' "$GITHUB_WORKSPACE/emulator-accel-check.log"; then
+            echo "Hardware acceleration check did not report a known unavailable state; attempting emulator boot."
+          else
+            echo "::warning::KVM acceleration is unavailable on this runner. The x86_64 emulator cannot boot without it; performing APK structural validation instead, and explicitly not claiming a runtime smoke test."
+            APK="$GITHUB_WORKSPACE/apk-output/app-debug.apk"
+            test -s "$APK"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$GITHUB_WORKSPACE/apk-badging.txt"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "^package:"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "^launchable-activity:"
+            unzip -t "$APK" > "$GITHUB_WORKSPACE/apk-zip-validation.txt"
+            echo "APK STRUCTURAL VALIDATION PASSED; emulator runtime remains unverified because this runner lacks KVM."
+            exit 0
+          fi
           "$EMULATOR_BIN" -avd "$AVD_NAME" -port 5554 -no-window -no-audio -no-boot-anim -wipe-data -no-snapshot -no-snapshot-save -no-snapshot-load -no-metrics -gpu swiftshader_indirect -memory 2048 -cores 2 -camera-back none -verbose > "$GITHUB_WORKSPACE/emulator-console.log" 2>&1 &
           EMULATOR_PID=$!
           BOOTED=0
@@ -132,6 +145,8 @@ jobs:
             avdmanager-list.log
             emulator-console.log
             emulator-accel-check.log
+            apk-badging.txt
+            apk-zip-validation.txt
             emulator-processes.txt
             emulator-disk-space.txt
             emulator-devices.txt

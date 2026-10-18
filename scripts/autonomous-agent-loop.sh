@@ -78,13 +78,11 @@ run_validation() {
 
 for attempt in 1 2; do
   echo "=== Autonomous implementation attempt $attempt/2 ==="
-  aider --model "openai/$AI_MODEL" --no-auto-commits --yes-always \
-    --file scripts/patch-comic-studio.py \
-    --file scripts/test-comic-studio.cjs \
-    --file scripts/test-webapp.cjs \
-    --file README.md \
-    --file THIRD_PARTY_NOTICES.md \
-    --message-file "$WORK_DIR/task.md"
+  AGENT_FILES=(--file scripts/patch-comic-studio.py --file scripts/test-comic-studio.cjs --file scripts/test-webapp.cjs --file README.md --file THIRD_PARTY_NOTICES.md)
+  if [[ -d android-overlay ]]; then
+    while IFS= read -r source_file; do AGENT_FILES+=(--file "$source_file"); done < <(find android-overlay -type f)
+  fi
+  aider --model "openai/$AI_MODEL" --no-auto-commits --yes-always "${AGENT_FILES[@]}" --message-file "$WORK_DIR/task.md"
 
   if run_validation > "$WORK_DIR/validation.log" 2>&1; then
     cat "$WORK_DIR/validation.log"

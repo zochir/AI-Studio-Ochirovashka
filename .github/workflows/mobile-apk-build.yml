@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate autonomous runner shell syntax
+        run: bash -n scripts/autonomous-agent-loop.sh
+
       - name: Find and extract Android project
         shell: bash
         run: |

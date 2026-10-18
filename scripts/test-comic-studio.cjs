@@ -30,7 +30,13 @@ const context = {
   document, console, Blob,
   URL: { createObjectURL: () => 'blob:comic-test', revokeObjectURL: () => {} },
   setTimeout: fn => fn(), clearTimeout,
-  fetch: async () => { throw new Error('Network must not be used in local mode'); },
+  fetch: async (url, options) => {
+    assert.equal(url, 'https://api.test/v1/chat/completions');
+    assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
+    const request = JSON.parse(options.body);
+    assert.equal(request.model, 'test-model');
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '[{"title":"AI panel","scene":"AI scene","dialogue":"Hello"}]' } }] }) };
+  },
   JSON, String, Number, Array, Math, Promise
 };
 vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
@@ -46,5 +52,13 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(anchors.length, 1);
   assert.equal(anchors[0].download, 'comic-storyboard.svg');
   assert.equal(anchors[0].clicked, true);
-  console.log('PASS: Comic Studio validation, offline storyboard generation, four-panel render, SVG export');
+
+  els.comicEndpoint.value = 'https://api.test/v1/chat/completions';
+  els.comicModel.value = 'test-model';
+  els.comicKey.value = 'temporary-test-key';
+  els.comicGenerate.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicPanels.innerHTML, /AI panel/);
+  assert.match(els.comicStatus.textContent, /через ИИ API/);
+  console.log('PASS: local storyboard, four-panel render, SVG export, optional OpenAI-compatible script API');
 })().catch(error => { console.error(error); process.exit(1); });

@@ -83,7 +83,8 @@ jobs:
           adb start-server
           EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
           test -x "$EMULATOR_BIN" || { echo "Emulator binary not found: $EMULATOR_BIN"; find "$ANDROID_HOME" -maxdepth 3 -type f -name emulator -print; exit 1; }
-          "$EMULATOR_BIN" -avd "$AVD_NAME" -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -no-snapshot-load -no-metrics -gpu swiftshader_indirect -memory 1536 -cores 2 -camera-back none > "$GITHUB_WORKSPACE/emulator-console.log" 2>&1 &
+          "$EMULATOR_BIN" -accel-check > "$GITHUB_WORKSPACE/emulator-accel-check.log" 2>&1 || true
+          "$EMULATOR_BIN" -avd "$AVD_NAME" -port 5554 -no-window -no-audio -no-boot-anim -wipe-data -no-snapshot -no-snapshot-save -no-snapshot-load -no-metrics -gpu swiftshader_indirect -memory 2048 -cores 2 -camera-back none -verbose > "$GITHUB_WORKSPACE/emulator-console.log" 2>&1 &
           EMULATOR_PID=$!
           BOOTED=0
           for i in $(seq 1 360); do
@@ -97,7 +98,9 @@ jobs:
           done
           if [ "$BOOTED" != "1" ]; then
             echo "Android emulator failed to boot within 360 seconds"
-            timeout 8s adb devices -l > "$GITHUB_WORKSPACE/emulator-devices.txt" 2>&1 || true
+            adb devices -l > "$GITHUB_WORKSPACE/emulator-devices.txt" 2>&1 || true
+            ps auxww > "$GITHUB_WORKSPACE/emulator-processes.txt" 2>&1 || true
+            df -h > "$GITHUB_WORKSPACE/emulator-disk-space.txt" 2>&1 || true
             timeout 8s adb -s emulator-5554 logcat -b all -d -t 1200 > "$GITHUB_WORKSPACE/emulator-boot-failure.log" 2>&1 || true
             tail -n 300 "$GITHUB_WORKSPACE/emulator-console.log" || true
             exit 1
@@ -128,6 +131,9 @@ jobs:
             avdmanager-create.log
             avdmanager-list.log
             emulator-console.log
+            emulator-accel-check.log
+            emulator-processes.txt
+            emulator-disk-space.txt
             emulator-devices.txt
             emulator-boot-failure.log
             emulator-logcat.txt

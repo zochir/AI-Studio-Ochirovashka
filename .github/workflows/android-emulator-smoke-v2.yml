@@ -139,6 +139,12 @@ jobs:
           sleep 5
           adb -s emulator-5554 shell dumpsys activity activities > "$GITHUB_WORKSPACE/emulator-activities.txt"
           grep -F "$PACKAGE" "$GITHUB_WORKSPACE/emulator-activities.txt"
+          adb -s emulator-5554 shell uiautomator dump /sdcard/window.xml > "$GITHUB_WORKSPACE/uiautomator-dump.log" 2>&1
+          adb -s emulator-5554 pull /sdcard/window.xml "$GITHUB_WORKSPACE/emulator-window.xml" >/dev/null
+          adb -s emulator-5554 shell screencap -p /sdcard/screen.png
+          adb -s emulator-5554 pull /sdcard/screen.png "$GITHUB_WORKSPACE/emulator-screen.png" >/dev/null
+          test -s "$GITHUB_WORKSPACE/emulator-window.xml" && grep -q "hierarchy" "$GITHUB_WORKSPACE/emulator-window.xml"
+          test -s "$GITHUB_WORKSPACE/emulator-screen.png"
           adb -s emulator-5554 logcat -b all -d -t 2000 > "$GITHUB_WORKSPACE/emulator-logcat.txt"
           ! grep -E 'FATAL EXCEPTION|Fatal signal|Process: .* has died' "$GITHUB_WORKSPACE/emulator-logcat.txt"
           echo "SMOKE TEST PASSED: APK installed and launcher activity started without a fatal crash"
@@ -160,5 +166,8 @@ jobs:
             emulator-boot-failure.log
             emulator-logcat.txt
             emulator-activities.txt
+            emulator-window.xml
+            emulator-screen.png
+            uiautomator-dump.log
           if-no-files-found: warn
           retention-days: 14

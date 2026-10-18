@@ -12,7 +12,7 @@ permissions:
   contents: read
 concurrency:
   group: android-emulator-smoke-v2-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   emulator-smoke:
     runs-on: ubuntu-24.04

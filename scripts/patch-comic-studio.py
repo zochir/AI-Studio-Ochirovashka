@@ -24,6 +24,8 @@ module = r"""
 <p class="comic-note" style="margin-top:-6px;font-weight:650">Разработчики: Очир Зулаев и Алиса</p>
 <p class="comic-note">Важно: «Создать раскадровку» формирует только текст кадров — это ещё не генерация рисунков. Серый блок означает, что изображение не создано. Чтобы получить реальные иллюстрации бесплатно локально, настройте ComfyUI и вставьте его API workflow; альтернативно укажите совместимый Images API. Ключ используется только в текущей сессии; для публичного приложения безопаснее обращаться к API через собственный сервер. Провайдер может блокировать прямые запросы из WebView через CORS.</p>
 <label for="comicStory">Идея или сюжет</label><textarea id="comicStory" rows="4" placeholder="Опишите героев, место действия и события"></textarea>
+<label for="comicCharacters">Паспорт персонажей — внешность, одежда, возраст, отличительные детали (необязательно)</label><textarea id="comicCharacters" rows="3" placeholder="Например: Лея — молодая исследовательница, короткие рыжие волосы, зелёный плащ, родинка под левым глазом. Во всех кадрах сохранять эти детали."></textarea>
+<div class="comic-row"><div><label for="comicMood">Атмосфера</label><select id="comicMood"><option>Приключение и динамика</option><option>Тёплая и уютная</option><option>Мрачная и напряжённая</option><option>Эпическая и масштабная</option><option>Юмор и лёгкость</option><option>Меланхоличная</option></select></div><div><label for="comicComposition">Композиция кадра</label><select id="comicComposition"><option>Автоматически по сцене</option><option>Кинематографический широкий план</option><option>Портрет и эмоции</option><option>Динамичный ракурс и движение</option><option>Общий план окружения</option></select></div></div>
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>
 <div><label for="comicStyle">Визуальный стиль</label><select id="comicStyle"><option>Комикс с чёткими контурами</option><option>Манга</option><option>Акварельное фэнтези</option><option>Научная фантастика</option><option>Нуар</option></select></div></div>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки ИИ-сценариста (необязательно)</summary>
@@ -73,7 +75,7 @@ module = r"""
  }
  function saveProject(){
   try{
-   const data={version:1,story:$("comicStory").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
+   const data={version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
    localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
    $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
   }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
@@ -85,6 +87,9 @@ module = r"""
    const data=JSON.parse(raw);
    if(!data||data.version!==1||!Array.isArray(data.panels))throw Error("неподдерживаемый формат проекта");
    $("comicStory").value=String(data.story||"");
+   $("comicCharacters").value=String(data.characters||"");
+   $("comicMood").value=String(data.mood||"Приключение и динамика");
+   $("comicComposition").value=String(data.composition||"Автоматически по сцене");
    $("comicCount").value=String(data.count||4);
    $("comicStyle").value=String(data.style||"Комикс с чёткими контурами");
    $("comicEndpoint").value=String(data.endpoint||"");
@@ -102,13 +107,13 @@ module = r"""
   return Array.from({length:n},(_,i)=>({title:names[i]||("Сцена "+(i+1)),scene:chunks[Math.min(chunks.length-1,Math.floor(i*chunks.length/n))]}));
  }
  async function generateScript(){
-  const story=$("comicStory").value.trim(),n=Number($("comicCount").value),endpoint=$("comicEndpoint").value.trim(),model=$("comicModel").value.trim(),key=$("comicKey").value;
+  const story=$("comicStory").value.trim(),characters=$("comicCharacters").value.trim(),mood=$("comicMood").value,composition=$("comicComposition").value,n=Number($("comicCount").value),endpoint=$("comicEndpoint").value.trim(),model=$("comicModel").value.trim(),key=$("comicKey").value;
   if(!story){$("comicStatus").textContent="Введите идею или сюжет.";return;}
   $("comicGenerate").disabled=true;
   try{
    if(endpoint){
     if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
-    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев и причинно-следственную связь."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Сюжет: "+story}]})});
+    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев, причинно-следственную связь, разнообразие планов и эмоций. Учитывай паспорт персонажей и атмосферу."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Атмосфера: "+mood+". Композиция: "+composition+". Паспорт персонажей: "+(characters||"создай подходящих сюжету героев и сохраняй их внешний вид")+". Сюжет: "+story}]})});
     if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
     const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
     if(!raw)throw Error("В ответе текстового API нет сценария.");
@@ -131,7 +136,7 @@ module = r"""
    let completed=0;
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Panel "+(i+1)+" of "+panels.length+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Keep recurring characters visually consistent, use a clear composition and no captions or lettering.";
+    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
     const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
     const data=await res.json(),item=data.data&&data.data[0];
@@ -170,11 +175,13 @@ module = r"""
   if(!base||!workflowText){$("comicStatus").textContent="Укажите адрес ComfyUI и API workflow JSON.";return;}
   let template;
   try{template=JSON.parse(workflowText);}catch(e){$("comicStatus").textContent="Workflow JSON некорректен: "+e.message;return;}
+   let placeholderCount=0;const countPlaceholders=v=>{if(typeof v==="string"){const m=v.match(/__PROMPT__/g);placeholderCount+=m?m.length:0;}else if(Array.isArray(v))v.forEach(countPlaceholders);else if(v&&typeof v==="object")Object.values(v).forEach(countPlaceholders);};countPlaceholders(template);
+   if(!placeholderCount){$("comicStatus").textContent="Workflow не содержит __PROMPT__. Добавьте этот маркер в positive prompt API-workflow, иначе каждый кадр будет генерироваться по одному и тому же запросу.";return;}
   $("comicGenerateLocal").disabled=true;
   try{
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create an actual narrative comic illustration, not an icon, logo, paint palette, easel, or placeholder. Depict the described scene. No text, letters, watermark, logo, paint palette, or easel. Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Keep character design consistent. No text or lettering.";
+    const prompt="Create an actual narrative comic illustration, not an icon, logo, paint palette, easel, or placeholder. Depict the described scene. No text, letters, watermark, logo, paint palette, or easel. Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle according to scene while preserving character identity. No text or lettering.";
     const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
     const res=await fetchTimed(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
     if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");

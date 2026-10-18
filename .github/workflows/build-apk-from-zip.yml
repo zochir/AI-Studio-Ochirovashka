@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-and-smoke-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -82,9 +82,44 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           # The supplied project compiles Java to 1.8 but Kotlin to 17.
-          # Keep Gradle's compatibility check from aborting the APK build;
-          # Android's D8/R8 toolchain can consume both bytecode levels.
+          # Keep Gradle's compatibility check from aborting the APK build.
           gradle --no-daemon -Pkotlin.jvm.target.validation.mode=warning assembleDebug
+          test -n "$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+
+      - name: Smoke-test APK in Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            set -euo pipefail
+            APK_PATH="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+            if [[ -z "$APK_PATH" ]]; then
+              echo "APK file not found"
+              exit 1
+            fi
+            APP_ID="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK_PATH" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+            if [[ -z "$APP_ID" ]]; then
+              echo "Could not determine Android application package name"
+              exit 1
+            fi
+            echo "Installing $APK_PATH (package $APP_ID)"
+            adb install -r "$APK_PATH"
+            adb logcat -c
+            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
+            sleep 10
+            if ! adb shell pidof "$APP_ID" >/dev/null 2>&1; then
+              echo "Application process is not running after launch"
+              adb logcat -d -t 500
+              exit 1
+            fi
+            if adb logcat -d -t 1000 | grep -E "FATAL EXCEPTION|Fatal signal" ; then
+              echo "Crash signature found in Android logcat"
+              exit 1
+            fi
+            echo "SMOKE TEST PASSED: APK installed and app process remained alive for 10 seconds"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

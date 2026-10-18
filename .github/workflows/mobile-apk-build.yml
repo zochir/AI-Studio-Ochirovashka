@@ -63,6 +63,21 @@ jobs:
           echo "--- Existing JNI and native library references ---"
           grep -RInE 'System.loadLibrary|external fun|JNIEXPORT|lib[A-Za-z0-9_]+\.so' "$PROJECT_DIR/app/src/main" --include='*.kt' --include='*.java' --include='*.cpp' --include='*.h' --include='*.xml' || true
 
+      - name: Inspect Android host source and build configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "--- Android source tree ---"
+          find "$PROJECT_DIR/app/src" -type f | sort
+          echo "--- MainActivity.kt ---"
+          sed -n '1,260p' "$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          echo "--- App Gradle configuration ---"
+          sed -n '1,240p' "$PROJECT_DIR/app/build.gradle.kts"
+          echo "--- Root Gradle configuration files ---"
+          for config in "$PROJECT_DIR/build.gradle.kts" "$PROJECT_DIR/settings.gradle.kts" "$PROJECT_DIR/gradle.properties"; do
+            if [[ -f "$config" ]]; then echo "### $config"; sed -n '1,200p' "$config"; fi
+          done
+
       - name: Patch Comic Studio module
         run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
 

@@ -62,7 +62,7 @@ module = r"""
  }
  function saveProject(){
   try{
-   const data={version:1,story:$("comicStory").value,count:$("comicCount").value,style:$("comicStyle").value,panels:panels};
+   const data={version:1,story:$("comicStory").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
    localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
    $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
   }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
@@ -76,6 +76,12 @@ module = r"""
    $("comicStory").value=String(data.story||"");
    $("comicCount").value=String(data.count||4);
    $("comicStyle").value=String(data.style||"Комикс с чёткими контурами");
+   $("comicEndpoint").value=String(data.endpoint||"");
+   $("comicModel").value=String(data.model||"");
+   $("comicImageEndpoint").value=String(data.imageEndpoint||"");
+   $("comicImageModel").value=String(data.imageModel||"");
+   $("comicLocalEndpoint").value=String(data.localEndpoint||"");
+   $("comicWorkflow").value=String(data.workflow||"");
    render(data.panels);
    $("comicStatus").textContent="Проект загружен ("+panels.length+" кадров).";
   }catch(e){$("comicStatus").textContent="Не удалось загрузить проект: "+e.message;}

@@ -17,10 +17,12 @@ class Element {
   focus() { this.focused = true; }
 }
 const ids = ['comicStory', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
-  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicGenerate', 'comicGenerateImages',
+  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
+els.comicLocalEndpoint.value = 'http://comfy.test:8188';
+els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
 els.comicStyle.value = 'Приключение';
 const anchors = [];
 const document = {
@@ -43,6 +45,13 @@ const context = {
       assert.equal(request.model, 'image-test-model');
       assert.match(request.prompt, /AI scene/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
+    }
+    if (url === 'http://comfy.test:8188/prompt') {
+      assert.match(JSON.stringify(request), /AI scene/);
+      return { ok: true, json: async () => ({ prompt_id: 'local-job-1' }) };
+    }
+    if (url === 'http://comfy.test:8188/history/local-job-1') {
+      return { ok: true, json: async () => ({ 'local-job-1': { outputs: { '9': { images: [{ filename: 'comic.png', subfolder: '', type: 'output' }] } } } }) };
     }
     throw new Error('Unexpected network endpoint: ' + url);
   },
@@ -76,5 +85,9 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
-  console.log('PASS: local storyboard, text API, image API request/response, rendered image, SVG export');
+  els.comicGenerateLocal.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/);
+  assert.match(els.comicStatus.textContent, /ComfyUI завершил генерацию/);
+  console.log('PASS: local storyboard, text API, image API, ComfyUI integration, SVG export');
 })().catch(error => { console.error(error); process.exit(1); });

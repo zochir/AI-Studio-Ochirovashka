@@ -70,6 +70,7 @@ run_validation() {
   PROJECT_DIR="$(find "$WORK_DIR/extracted" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
   test -n "$PROJECT_DIR" || { echo "Validation failed: Gradle settings not found."; return 1; }
   test -d "$PROJECT_DIR/app" || { echo "Validation failed: app module not found."; return 1; }
+  if [[ -d android-overlay ]]; then cp -a android-overlay/. "$PROJECT_DIR"/; fi
   python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
   node scripts/test-webapp.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
   node scripts/test-comic-studio.cjs "$PROJECT_DIR/app/src/main/assets/index.html"

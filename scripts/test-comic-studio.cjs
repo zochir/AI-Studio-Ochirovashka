@@ -34,7 +34,7 @@ const context = {
   URL: { createObjectURL: () => 'blob:comic-test', revokeObjectURL: () => {} },
   setTimeout: fn => fn(), clearTimeout,
   fetch: async (url, options) => {
-    const request = JSON.parse(options.body);
+    const request = options && options.body ? JSON.parse(options.body) : {};
     if (url === 'https://api.test/v1/chat/completions') {
       assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
       assert.equal(request.model, 'test-model');

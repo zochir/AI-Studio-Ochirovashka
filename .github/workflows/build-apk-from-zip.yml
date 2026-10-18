@@ -53,6 +53,26 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Building project from: $PROJECT_DIR"
 
+      - name: Validate app source structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          MANIFEST="$PROJECT_DIR/app/src/main/AndroidManifest.xml"
+
+          test -s "$HTML" || { echo "Web UI asset missing or empty: $HTML"; exit 1; }
+          test -s "$ACTIVITY" || { echo "MainActivity source missing or empty: $ACTIVITY"; exit 1; }
+          test -s "$MANIFEST" || { echo "Android manifest missing or empty: $MANIFEST"; exit 1; }
+
+          grep -Eiq '<html([[:space:]>])' "$HTML" || { echo "Web UI does not contain an HTML root element"; exit 1; }
+          grep -Eiq '<script([[:space:]>])' "$HTML" || { echo "Web UI has no JavaScript block"; exit 1; }
+          grep -Eiq '<(button|input|textarea|select)([[:space:]>])' "$HTML" || { echo "Web UI has no detectable interactive controls"; exit 1; }
+          grep -Eq 'WebView|loadUrl' "$ACTIVITY" || { echo "MainActivity does not appear to load a WebView"; exit 1; }
+          grep -Eiq 'android.intent.action.MAIN|android.intent.category.LAUNCHER' "$MANIFEST" || { echo "Manifest has no launcher activity declaration"; exit 1; }
+
+          echo "SOURCE STRUCTURE CHECK PASSED: HTML/JavaScript UI, interactive controls, WebView host, launcher manifest"
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -131,15 +151,26 @@ jobs:
 
             # Save a UI hierarchy snapshot for debugging and assert that Android
             # can inspect a non-empty app window after launch.
+            mkdir -p "$GITHUB_WORKSPACE/test-evidence"
             adb shell uiautomator dump /sdcard/window.xml >/dev/null
-            adb shell cat /sdcard/window.xml > /tmp/window.xml
-            if [[ ! -s /tmp/window.xml ]] || ! grep -q "hierarchy" /tmp/window.xml; then
+            adb pull /sdcard/window.xml "$GITHUB_WORKSPACE/test-evidence/window.xml" >/dev/null
+            adb shell screencap -p /sdcard/screen.png
+            adb pull /sdcard/screen.png "$GITHUB_WORKSPACE/test-evidence/screen.png" >/dev/null
+            if [[ ! -s "$GITHUB_WORKSPACE/test-evidence/window.xml" ]] || ! grep -q "hierarchy" "$GITHUB_WORKSPACE/test-evidence/window.xml"; then
               echo "Could not capture the app's UI hierarchy"
-              cat /tmp/window.xml || true
+              cat "$GITHUB_WORKSPACE/test-evidence/window.xml" || true
               exit 1
             fi
-            echo "UI hierarchy captured successfully"
+            echo "UI hierarchy and emulator screenshot captured as test evidence"
             echo "SMOKE TEST PASSED: APK installed, foreground activity confirmed, UI hierarchy captured, no fatal crash detected"
+
+      - name: Upload emulator test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-Test-Evidence
+          path: test-evidence/
+          if-no-files-found: ignore
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

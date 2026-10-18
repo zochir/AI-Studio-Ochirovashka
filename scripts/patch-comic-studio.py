@@ -40,7 +40,7 @@ module = r"""
 </details>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Локальная генерация через ComfyUI (основной режим)</summary>
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
-<label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" value="http://127.0.0.1:8188" placeholder="http://192.168.1.20:8188">
+<label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"class_type":"...","inputs":{"text":"__PROMPT__"}}}'></textarea>
 <button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
 </details>

@@ -21,6 +21,7 @@ module = r"""
 </style>
 <section id="comicLab" aria-labelledby="comicLabTitle">
 <h2 id="comicLabTitle">Комикс-студия</h2>
+<p class="comic-note" style="margin-top:-6px;font-weight:650">Разработчики: Очир Зулаев и Алиса</p>
 <p class="comic-note">Сначала создайте раскадровку. Для настоящих изображений подключите совместимый с OpenAI Images API сервис. Ключ используется только в текущей сессии; для публичного приложения безопаснее обращаться к API через собственный сервер. Провайдер может блокировать прямые запросы из WebView через CORS.</p>
 <label for="comicStory">Идея или сюжет</label><textarea id="comicStory" rows="4" placeholder="Опишите героев, место действия и события"></textarea>
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>

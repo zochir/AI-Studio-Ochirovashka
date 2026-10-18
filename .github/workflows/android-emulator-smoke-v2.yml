@@ -71,6 +71,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
+          emulator-boot-timeout: 300
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none
           script: |

@@ -1,5 +1,9 @@
 name: Build AI Studio Ochirovashka APK
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:

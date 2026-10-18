@@ -42,7 +42,7 @@ module = r"""
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"class_type":"...","inputs":{"text":"__PROMPT__"}}}'></textarea>
-<button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
+<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button>
@@ -133,6 +133,26 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
+ async function checkLocalConnection(){
+  const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,"");
+  if(!base){$("comicStatus").textContent="Укажите адрес ComfyUI.";return;}
+  const button=$("comicCheckLocal");button.disabled=true;
+  $("comicStatus").textContent="Проверка соединения с ComfyUI…";
+  try{
+   const controller=typeof AbortController!=="undefined"?new AbortController():null;
+   const timer=setTimeout(()=>{if(controller)controller.abort();},8000);
+   let response;
+   try{response=await fetch(base+"/system_stats",{method:"GET",signal:controller?controller.signal:undefined});}
+   finally{clearTimeout(timer);}
+   if(!response.ok)throw Error("HTTP "+response.status);
+   const info=await response.json();
+   const devices=Array.isArray(info.devices)?info.devices.length:0;
+   $("comicStatus").textContent="ComfyUI доступен. Ответ /system_stats получен"+(devices?"; устройств: "+devices:"")+". Теперь можно запускать генерацию.";
+  }catch(e){
+   const reason=e&&e.name==="AbortError"?"тайм-аут (8 секунд)":e.message;
+   $("comicStatus").textContent="Не удалось подключиться к ComfyUI: "+reason+". Проверьте адрес, что сервер запущен, доступ по локальной сети и CORS.";
+  }finally{button.disabled=false;}
+ }
  async function generateLocalImages(){
   const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,""),workflowText=$("comicWorkflow").value.trim();
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
@@ -200,6 +220,7 @@ module = r"""
  }
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",generateImages);
+ $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);
  $("comicExport").addEventListener("click",exportSvg);
  $("comicSave").addEventListener("click",saveProject);

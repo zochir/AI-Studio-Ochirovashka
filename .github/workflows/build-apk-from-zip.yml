@@ -121,6 +121,18 @@ jobs:
           done
           echo "JAVASCRIPT SYNTAX CHECK PASSED"
 
+      - name: Test editor interactions with mocked Android TTS
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$GITHUB_WORKSPACE/scripts/test-webapp.cjs" "$PROJECT_DIR/app/src/main/assets/index.html"
+
+      - name: Feature-marker diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
           echo "Feature-marker diagnostics (presence is not proof of runtime functionality):"
           if grep -Eiq 'comic|комикс|кадр|panel' "$HTML"; then echo "COMIC_UI_MARKERS=found"; else echo "COMIC_UI_MARKERS=not-found"; fi
           if grep -Eiq 'TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts' "$HTML" "$ACTIVITY"; then echo "TTS_MARKERS=found"; else echo "TTS_MARKERS=not-found"; fi

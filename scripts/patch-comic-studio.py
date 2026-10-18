@@ -38,6 +38,12 @@ module = r"""
 <label for="comicImageModel">Модель изображений</label><input id="comicImageModel" placeholder="image-model">
 <label for="comicImageKey">Ключ API изображений</label><input id="comicImageKey" type="password" autocomplete="off">
 </details>
+<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Локальная генерация через ComfyUI (основной режим)</summary>
+<p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
+<label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" value="http://127.0.0.1:8188" placeholder="http://192.168.1.20:8188">
+<label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"class_type":"...","inputs":{"text":"__PROMPT__"}}}'></textarea>
+<button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
+</details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button>
 <button id="comicExport" type="button">Экспорт SVG-страницы</button>
@@ -100,6 +106,42 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
+ async function generateLocalImages(){
+  const base=$("comicLocalEndpoint").value.trim().replace(/\\/$/,""),workflowText=$("comicWorkflow").value.trim();
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  if(!base||!workflowText){$("comicStatus").textContent="Укажите адрес ComfyUI и API workflow JSON.";return;}
+  let template;
+  try{template=JSON.parse(workflowText);}catch(e){$("comicStatus").textContent="Workflow JSON некорректен: "+e.message;return;}
+  $("comicGenerateLocal").disabled=true;
+  try{
+   for(let i=0;i<panels.length;i++){
+    $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
+    const prompt="Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Keep character design consistent. No text or lettering.";
+    const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
+    const res=await fetch(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
+    if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
+    const queued=await res.json(),id=queued.prompt_id;
+    if(!id)throw Error("ComfyUI не вернул prompt_id.");
+    let history=null;
+    for(let attempt=0;attempt<180;attempt++){
+     await new Promise(resolve=>setTimeout(resolve,1000));
+     const hr=await fetch(base+"/history/"+encodeURIComponent(id));
+     if(!hr.ok)continue;
+     const hd=await hr.json();history=hd[id]||hd[String(id)];
+     if(history&&history.outputs)break;
+     if(history&&history.status&&history.status.status_str==="error")throw Error("ComfyUI сообщил об ошибке генерации.");
+    }
+    if(!history||!history.outputs)throw Error("Истекло ожидание ComfyUI (3 минуты).");
+    let image=null;
+    for(const output of Object.values(history.outputs)){if(output&&Array.isArray(output.images)&&output.images.length){image=output.images[0];break;}}
+    if(!image||!image.filename)throw Error("В результате workflow нет изображения. Проверьте SaveImage и выходы workflow.");
+    const q=new URLSearchParams({filename:image.filename,subfolder:image.subfolder||"",type:image.type||"output"});
+    panels[i].imageUrl=base+"/view?"+q.toString();render(panels);
+   }
+   $("comicStatus").textContent="ComfyUI завершил генерацию всех "+panels.length+" кадров. Изображения доступны по адресу локального движка.";
+  }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен, workflow API-формата корректен и браузеру разрешён CORS.";}
+  finally{$("comicGenerateLocal").disabled=false;}
+ }
  function exportSvg(){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -111,6 +153,7 @@ module = r"""
  }
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",generateImages);
+ $("comicGenerateLocal").addEventListener("click",generateLocalImages);
  $("comicExport").addEventListener("click",exportSvg);
 })();
 </script>

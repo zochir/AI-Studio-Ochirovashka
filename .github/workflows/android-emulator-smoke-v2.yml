@@ -7,6 +7,7 @@ on:
       - '**.zip'
       - 'scripts/**'
       - '.github/workflows/android-emulator-smoke-v2.yml'
+      - '.github/workflows/build-apk-from-zip.yml'
 permissions:
   contents: read
 concurrency:
@@ -44,7 +45,7 @@ jobs:
           packages: platform-tools
       - name: Install SDK and emulator packages
         timeout-minutes: 5
-        run: sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-34;google_apis;x86_64"
+        run: sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" "system-images;android-30;google_apis;x86_64"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build debug APK
@@ -68,14 +69,14 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 8
         with:
-          api-level: 34
+          api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
           emulator-boot-timeout: 360
           disable-animations: true
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -no-snapshot-load -gpu swiftshader_indirect -camera-back none -memory 2048 -cores 2
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -no-snapshot-load -gpu swiftshader_indirect -camera-back none -memory 1536 -cores 2
           script: |
             set -euo pipefail
             adb start-server

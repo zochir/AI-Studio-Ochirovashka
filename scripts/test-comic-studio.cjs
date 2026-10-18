@@ -16,11 +16,14 @@ class Element {
   click() { if (this.listeners.click) return this.listeners.click({ target: this }); this.clicked = true; }
   focus() { this.focused = true; }
 }
-const ids = ['comicStory', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
+const ids = ['comicStory', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicSave', 'comicLoad', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
+els.comicCharacters.value = 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.';
+els.comicMood.value = 'Эпическая и масштабная';
+els.comicComposition.value = 'Динамичный ракурс и движение';
 els.comicLocalEndpoint.value = 'http://comfy.test:8188';
 els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
 els.comicStyle.value = 'Приключение';
@@ -48,6 +51,8 @@ const context = {
       if (options.headers.Authorization) assert.equal(options.headers.Authorization, 'Bearer image-test-key');
       assert.equal(request.model, 'image-test-model');
       assert.match(request.prompt, /AI scene/);
+      assert.match(request.prompt, /Лея: рыжие короткие волосы/);
+      assert.match(request.prompt, /Динамичный ракурс/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
     }
     if (url === 'http://comfy.test:8188/system_stats') {
@@ -101,6 +106,8 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   const storedProject = [...saved.values()][0];
   assert.match(storedProject, /images\.test/);
   assert.match(storedProject, /comfy\.test/);
+  assert.match(storedProject, /Лея: рыжие короткие волосы/);
+  assert.match(storedProject, /Эпическая и масштабная/);
   assert.doesNotMatch(storedProject, /temporary-test-key|image-test-key/);
   els.comicImageEndpoint.value = '';
   els.comicLocalEndpoint.value = '';
@@ -112,11 +119,18 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(els.comicImageEndpoint.value, 'https://images.test/v1/images/generations');
   assert.equal(els.comicLocalEndpoint.value, 'http://comfy.test:8188');
   assert.equal(els.comicWorkflow.value, '{"1":{"inputs":{"text":"__PROMPT__"}}}');
+  assert.equal(els.comicCharacters.value, 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.');
+  assert.equal(els.comicMood.value, 'Эпическая и масштабная');
+  assert.equal(els.comicComposition.value, 'Динамичный ракурс и движение');
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /Проект загружен/);
   els.comicCheckLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /ComfyUI доступен/);
+  els.comicWorkflow.value = '{"1":{"inputs":{"text":"static prompt"}}}';
+  els.comicGenerateLocal.click();
+  assert.match(els.comicStatus.textContent, /не содержит __PROMPT__/);
+  els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
   els.comicGenerateLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   console.log('LOCAL STATUS:', els.comicStatus.textContent);
@@ -131,5 +145,5 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerateImages.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
-  console.log('PASS: local storyboard, keyed/keyless text API, keyed/keyless image API, ComfyUI integration, SVG export');
+  console.log('PASS: storyboard, character bible persistence, visual variation controls, keyed/keyless text and image APIs, ComfyUI validation/integration, SVG export');
 })().catch(error => { console.error(error); process.exit(1); });

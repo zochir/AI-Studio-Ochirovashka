@@ -16,7 +16,7 @@ class Element {
   click() { if (this.listeners.click) return this.listeners.click({ target: this }); this.clicked = true; }
   focus() { this.focused = true; }
 }
-const ids = ['comicStory', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
+const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicSave', 'comicLoad', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -145,5 +145,12 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerateImages.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  els.comicCharacterName.value = 'Тар';
+  els.comicCharacterLook.value = 'синяя броня, серебряные глаза, шрам над бровью';
+  els.comicAddCharacter.click();
+  assert.match(els.comicCharacters.value, /Тар — синяя броня, серебряные глаза, шрам над бровью/);
+  assert.match(els.comicStatus.textContent, /Карточка персонажа «Тар» добавлена/);
+  els.comicAddCharacter.click();
+  assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
   console.log('PASS: storyboard, character bible persistence, visual variation controls, keyed/keyless text and image APIs, ComfyUI validation/integration, SVG export');
 })().catch(error => { console.error(error); process.exit(1); });

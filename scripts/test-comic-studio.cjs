@@ -17,7 +17,7 @@ class Element {
   focus() { this.focused = true; }
 }
 const ids = ['comicStory', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
-  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
+  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicSave', 'comicLoad', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
@@ -49,6 +49,9 @@ const context = {
       assert.equal(request.model, 'image-test-model');
       assert.match(request.prompt, /AI scene/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
+    }
+    if (url === 'http://comfy.test:8188/system_stats') {
+      return { ok: true, json: async () => ({ devices: [{ name: 'test-device' }] }) };
     }
     if (url === 'http://comfy.test:8188/prompt') {
       assert.match(JSON.stringify(request), /AI scene/);
@@ -111,6 +114,9 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(els.comicWorkflow.value, '{"1":{"inputs":{"text":"__PROMPT__"}}}');
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /Проект загружен/);
+  els.comicCheckLocal.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicStatus.textContent, /ComfyUI доступен/);
   els.comicGenerateLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   console.log('LOCAL STATUS:', els.comicStatus.textContent);

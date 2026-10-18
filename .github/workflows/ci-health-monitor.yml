@@ -1,0 +1,52 @@
+name: Lightweight CI health monitor
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: ci-health-monitor
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Inspect recent workflow runs without triggering builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs?per_page=20" > /tmp/runs.json
+          python3 - <<'PY'
+          import datetime, json, os, sys
+          data=json.load(open('/tmp/runs.json', encoding='utf-8'))
+          now=datetime.datetime.now(datetime.timezone.utc)
+          stuck=[]
+          recent=[]
+          for run in data.get('workflow_runs', []):
+              name=run.get('name','')
+              status=run.get('status','')
+              created=run.get('created_at')
+              url=run.get('html_url','')
+              if name == 'Lightweight CI health monitor':
+                  continue
+              age=0
+              if created:
+                  age=(now-datetime.datetime.fromisoformat(created.replace('Z','+00:00'))).total_seconds()/60
+              recent.append((name,status,run.get('conclusion') or '-',round(age),url))
+              if status == 'in_progress' and age >= 25:
+                  stuck.append((name,round(age),url))
+          print('Recent workflows (name | status | conclusion | age_min | URL):')
+          for row in recent[:12]: print(' | '.join(map(str,row)))
+          if stuck:
+              print('\nWARNING: workflows running for at least 25 minutes:')
+              for row in stuck: print(f'{row[0]} ({row[1]} min): {row[2]}')
+              print('No automatic rerun or cancellation was performed.')
+              sys.exit(1)
+          print('\nNo stale in-progress workflow detected. This monitor does not start builds or retry jobs.')
+          PY

@@ -87,6 +87,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
   els.comicGenerateLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
+  console.log('LOCAL STATUS:', els.comicStatus.textContent);
   assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/);
   assert.match(els.comicStatus.textContent, /ComfyUI завершил генерацию/);
   console.log('PASS: local storyboard, text API, image API, ComfyUI integration, SVG export');

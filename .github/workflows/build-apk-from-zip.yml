@@ -182,7 +182,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AI-Studio-Ochirovashka-Source-Audit
-          path: test-evidence/source-audit.md
+          path: test-evidence/
           if-no-files-found: error
 
       - name: Set up Java

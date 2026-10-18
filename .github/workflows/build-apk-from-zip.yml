@@ -248,6 +248,13 @@ jobs:
           gradle --no-daemon -Pkotlin.jvm.target.validation.mode=warning assembleDebug
           test -n "$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
 
+      - name: Upload APK immediately after build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-APK
+          path: extracted/**/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
       - name: Smoke-test APK in Android emulator
         timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
@@ -315,9 +322,3 @@ jobs:
           path: test-evidence/
           if-no-files-found: ignore
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: AI-Studio-Ochirovashka-APK
-          path: extracted/**/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error

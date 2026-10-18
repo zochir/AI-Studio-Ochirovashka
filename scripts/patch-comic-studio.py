@@ -46,18 +46,39 @@ module = r"""
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button>
-<button id="comicExport" type="button">Экспорт SVG-страницы</button>
+<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExport" type="button">Экспорт SVG-страницы</button>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
 <script>
 (function(){
  const $=id=>document.getElementById(id);
  let panels=[];
+ const PROJECT_KEY="ai-studio-comic-project-v1";
  const names=["Завязка","Открытие","Развитие","Поворот","Кульминация","Развязка","Финал","Эпилог"];
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  function render(items){
   panels=items.map((p,i)=>({title:String(p.title||("Кадр "+(i+1)),),scene:String(p.scene||p.description||""),dialogue:String(p.dialogue||""),imageUrl:p.imageUrl||""}));
   $("comicPanels").innerHTML=panels.map((p,i)=>'<article class="comic-panel">'+(p.imageUrl?'<img class="comic-art" alt="Иллюстрация кадра '+(i+1)+'" src="'+esc(p.imageUrl)+'">':'<div class="comic-art" aria-hidden="true">🎨</div>')+'<h3>'+esc((i+1)+". "+p.title)+'</h3><p>'+esc(p.scene)+'</p>'+(p.dialogue?'<p><b>Реплика:</b> '+esc(p.dialogue)+'</p>':'')+'</article>').join("");
+ }
+ function saveProject(){
+  try{
+   const data={version:1,story:$("comicStory").value,count:$("comicCount").value,style:$("comicStyle").value,panels:panels};
+   localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
+   $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
+  }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
+ }
+ function loadProject(){
+  try{
+   const raw=localStorage.getItem(PROJECT_KEY);
+   if(!raw){$("comicStatus").textContent="Сохранённый проект на этом устройстве не найден.";return;}
+   const data=JSON.parse(raw);
+   if(!data||data.version!==1||!Array.isArray(data.panels))throw Error("неподдерживаемый формат проекта");
+   $("comicStory").value=String(data.story||"");
+   $("comicCount").value=String(data.count||4);
+   $("comicStyle").value=String(data.style||"Комикс с чёткими контурами");
+   render(data.panels);
+   $("comicStatus").textContent="Проект загружен ("+panels.length+" кадров).";
+  }catch(e){$("comicStatus").textContent="Не удалось загрузить проект: "+e.message;}
  }
  function localScenes(story,n){
   const sentences=story.replace(/\s+/g," ").split(/[.!?。！？]+/).map(x=>x.trim()).filter(Boolean),chunks=sentences.length?sentences:[story];
@@ -175,6 +196,8 @@ module = r"""
  $("comicGenerateImages").addEventListener("click",generateImages);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);
  $("comicExport").addEventListener("click",exportSvg);
+ $("comicSave").addEventListener("click",saveProject);
+ $("comicLoad").addEventListener("click",loadProject);
 })();
 </script>
 <!-- /AI_STUDIO_COMIC_MODULE_V1 -->

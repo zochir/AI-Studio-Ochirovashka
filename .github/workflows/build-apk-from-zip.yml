@@ -122,6 +122,65 @@ jobs:
           if grep -Eiq 'TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts' "$HTML" "$ACTIVITY"; then echo "TTS_MARKERS=found"; else echo "TTS_MARKERS=not-found"; fi
           if grep -Eiq 'fetch[[:space:]]*\\(|XMLHttpRequest|api[_/-]?key|gemini|openai|ollama|нейросет|искусственн.*интеллект' "$HTML" "$ACTIVITY"; then echo "AI_API_MARKERS=found"; else echo "AI_API_MARKERS=not-found"; fi
 
+      - name: Audit UI controls and implemented feature hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-evidence
+          python3 - "$PROJECT_DIR/app/src/main/assets/index.html" "$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt" test-evidence/source-audit.md <<'PY'
+          import html.parser, pathlib, re, sys
+          html_path, activity_path, report_path = map(pathlib.Path, sys.argv[1:])
+          source = html_path.read_text(encoding="utf-8")
+          activity = activity_path.read_text(encoding="utf-8")
+          class Audit(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.controls = []
+                  self.current = None
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag.lower() in {"button", "input", "textarea", "select"}:
+                      self.current = {"tag": tag.lower(), "id": attrs.get("id", ""), "type": attrs.get("type", ""), "text": "", "onclick": attrs.get("onclick", "")}
+                      self.controls.append(self.current)
+                  elif tag.lower() == "script":
+                      self.current = None
+              def handle_data(self, data):
+                  if self.current is not None:
+                      self.current["text"] += data.strip() + " "
+              def handle_endtag(self, tag):
+                  if self.current is not None and tag.lower() == self.current["tag"]:
+                      self.current = None
+          parser = Audit()
+          parser.feed(source)
+          functions = sorted(set(re.findall(r"\bfunction\s+([A-Za-z_$][\w$]*)\s*\(", source)))
+          functions += sorted(set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>", source)))
+          markers = {
+              "comic/generation terminology": bool(re.search(r"comic|комикс|кадр|panel|generate", source, re.I)),
+              "text-to-speech markers": bool(re.search(r"TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts", source + activity, re.I)),
+              "network/API markers": bool(re.search(r"fetch\s*\(|XMLHttpRequest|https?://|api[_/-]?key|gemini|openai|ollama", source + activity, re.I)),
+              "WebView host": bool(re.search(r"WebView|loadUrl", activity)),
+          }
+          script_count = len(re.findall(r"<script(?:\s[^>]*)?>", source, re.I))
+          lines = ["# Automated source audit", "", f"- HTML asset bytes: {html_path.stat().st_size}", f"- Inline script blocks: {script_count}", f"- Interactive controls: {len(parser.controls)}", f"- Named JavaScript functions detected: {len(set(functions))}", "", "## Feature marker scan", ""]
+          lines += [f"- {name}: {'found' if found else 'not found'}" for name, found in markers.items()]
+          lines += ["", "## Interactive controls", ""]
+          for c in parser.controls:
+              label = (c["text"] or "").strip().replace("|", "\\|")[:100]
+              lines.append(f"- {c['tag']} id={c['id']} type={c['type']} label={label} onclick={c['onclick'][:120]}")
+          lines += ["", "## JavaScript function names", ""]
+          lines += [f"- {name}" for name in sorted(set(functions))]
+          lines += ["", "This is static source analysis. Marker presence does not establish that a feature works at runtime."]
+          report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+
+      - name: Upload source audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Studio-Ochirovashka-Source-Audit
+          path: test-evidence/source-audit.md
+          if-no-files-found: error
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

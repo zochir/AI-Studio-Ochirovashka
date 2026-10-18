@@ -73,6 +73,55 @@ jobs:
 
           echo "SOURCE STRUCTURE CHECK PASSED: HTML/JavaScript UI, interactive controls, WebView host, launcher manifest"
 
+      - name: Check embedded JavaScript syntax and report feature markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          ACTIVITY="$PROJECT_DIR/app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+          mkdir -p /tmp/inline-js
+          python3 - "$HTML" /tmp/inline-js <<'PY'
+          import html.parser, pathlib, sys
+          source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          out = pathlib.Path(sys.argv[2])
+          class Scripts(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.active = False
+                  self.external = False
+                  self.parts = []
+                  self.scripts = []
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower() == "script":
+                      self.active = True
+                      self.external = any(k.lower() == "src" for k, _ in attrs)
+                      self.parts = []
+              def handle_data(self, data):
+                  if self.active and not self.external:
+                      self.parts.append(data)
+              def handle_endtag(self, tag):
+                  if tag.lower() == "script" and self.active:
+                      if not self.external and "".join(self.parts).strip():
+                          self.scripts.append("".join(self.parts))
+                      self.active = False
+          parser = Scripts()
+          parser.feed(source)
+          if not parser.scripts:
+              raise SystemExit("No inline JavaScript found to syntax-check")
+          for i, script in enumerate(parser.scripts, 1):
+              (out / f"script-{i}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(parser.scripts)} inline JavaScript block(s) for syntax validation")
+          PY
+          for script in /tmp/inline-js/*.js; do
+            node --check "$script"
+          done
+          echo "JAVASCRIPT SYNTAX CHECK PASSED"
+
+          echo "Feature-marker diagnostics (presence is not proof of runtime functionality):"
+          if grep -Eiq 'comic|комикс|кадр|panel' "$HTML"; then echo "COMIC_UI_MARKERS=found"; else echo "COMIC_UI_MARKERS=not-found"; fi
+          if grep -Eiq 'TextToSpeech|speechSynthesis|SpeechSynthesisUtterance|озвуч|голос|tts' "$HTML" "$ACTIVITY"; then echo "TTS_MARKERS=found"; else echo "TTS_MARKERS=not-found"; fi
+          if grep -Eiq 'fetch[[:space:]]*\\(|XMLHttpRequest|api[_/-]?key|gemini|openai|ollama|нейросет|искусственн.*интеллект' "$HTML" "$ACTIVITY"; then echo "AI_API_MARKERS=found"; else echo "AI_API_MARKERS=not-found"; fi
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

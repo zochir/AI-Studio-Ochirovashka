@@ -27,13 +27,13 @@ module = r"""
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>
 <div><label for="comicStyle">Визуальный стиль</label><select id="comicStyle"><option>Комикс с чёткими контурами</option><option>Манга</option><option>Акварельное фэнтези</option><option>Научная фантастика</option><option>Нуар</option></select></div></div>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки ИИ-сценариста (необязательно)</summary>
-<p class="comic-note">OpenAI-compatible Chat Completions. Ответ модели должен содержать JSON-массив с полями title, scene, dialogue.</p>
+<p class="comic-note">OpenAI-compatible Chat Completions (например, локальный Ollama /v1/chat/completions). Ответ модели должен содержать JSON-массив с полями title, scene, dialogue. Для локального сервера ключ обычно не нужен.</p>
 <label for="comicEndpoint">Chat-completions endpoint</label><input id="comicEndpoint" type="url" placeholder="https://example.com/v1/chat/completions">
 <label for="comicModel">Модель текста</label><input id="comicModel" placeholder="text-model">
 <label for="comicKey">Ключ текстового API</label><input id="comicKey" type="password" autocomplete="off">
 </details>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки генерации изображений</summary>
-<p class="comic-note">Поддерживается формат OpenAI Images API: POST endpoint с полями model, prompt, size, n; ответ data[0].url или data[0].b64_json. Обычно для каждого кадра нужен отдельный запрос.</p>
+<p class="comic-note">Поддерживается формат OpenAI Images API: POST endpoint с полями model, prompt, size, n; ответ data[0].url или data[0].b64_json. Для локального совместимого сервера ключ можно оставить пустым. Обычно для каждого кадра нужен отдельный запрос.</p>
 <label for="comicImageEndpoint">Images endpoint</label><input id="comicImageEndpoint" type="url" placeholder="https://example.com/v1/images/generations">
 <label for="comicImageModel">Модель изображений</label><input id="comicImageModel" placeholder="image-model">
 <label for="comicImageKey">Ключ API изображений</label><input id="comicImageKey" type="password" autocomplete="off">
@@ -96,8 +96,8 @@ module = r"""
   $("comicGenerate").disabled=true;
   try{
    if(endpoint){
-    if(!/^https?:\/\//i.test(endpoint)||!model||!key)throw Error("Для текстового ИИ укажите endpoint, модель и ключ.");
-    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев и причинно-следственную связь."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Сюжет: "+story}]})});
+    if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
+    const res=await fetch(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев и причинно-следственную связь."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Сюжет: "+story}]})});
     if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
     const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
     if(!raw)throw Error("В ответе текстового API нет сценария.");
@@ -113,7 +113,7 @@ module = r"""
  async function generateImages(){
   const endpoint=$("comicImageEndpoint").value.trim(),model=$("comicImageModel").value.trim(),key=$("comicImageKey").value;
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  if(!endpoint||!model||!key){$("comicStatus").textContent="Для генерации изображений укажите endpoint, модель и ключ API изображений.";return;}
+  if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
   if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
   $("comicGenerateImages").disabled=true;
   try{
@@ -121,7 +121,7 @@ module = r"""
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
     const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Panel "+(i+1)+" of "+panels.length+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Keep recurring characters visually consistent, use a clear composition and no captions or lettering.";
-    const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
+    const res=await fetch(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
     const data=await res.json(),item=data.data&&data.data[0];
     if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));

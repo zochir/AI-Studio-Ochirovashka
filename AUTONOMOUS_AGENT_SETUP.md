@@ -20,7 +20,8 @@ Choose a provider and model only after checking its current free-tier limits, ra
 - Scheduled cadence: every 30 minutes; manual trigger is also available.
 - Each invocation has a 25-minute hard timeout and makes at most two edit/validation attempts.
 - Existing branch `autonomous/mnn-diffusion` is resumed across runs.
-- Validation extracts the Android ZIP, applies the patch script, and runs both JavaScript regression suites.
+- Validation extracts the Android ZIP, overlays tracked native Android source from `android-overlay/`, applies the patch script, and runs both JavaScript regression suites. The APK CI applies the same overlay before building.
+- Native Android implementation files should be added under `android-overlay/` using paths relative to the extracted Gradle project. This avoids losing native source changes when the base project ZIP is extracted again.
 - After a successful candidate change, the workflow triggers `mobile-apk-build.yml` and opens or updates a draft PR.
 - Android APK build success is not proof of on-device diffusion inference. MNN/model integration still requires actual inference evidence and license review.
 - The agent is not allowed to merge the PR automatically. Review the diff and CI artifacts before merging.

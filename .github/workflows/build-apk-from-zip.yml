@@ -19,20 +19,41 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Find and extract project ZIP
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p extracted
-          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)"
-          if [ -z "$ZIP_FILE" ]; then
+          ZIP_FILE="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
+          if [[ -z "$ZIP_FILE" ]]; then
             echo "Project ZIP not found in repository root"
             exit 1
           fi
           unzip -q "$ZIP_FILE" -d extracted
-          PROJECT_DIR="$(find extracted -type f -name settings.gradle -printf '%h\n' | head -n 1)"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "settings.gradle not found in ZIP"
+
+          PROJECT_DIR=""
+          while IFS= read -r -d '' file; do
+            PROJECT_DIR="$(dirname "$file")"
+            break
+          done < <(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print0)
+
+          if [[ -z "$PROJECT_DIR" ]]; then
+            echo "Neither settings.gradle nor settings.gradle.kts was found in ZIP"
+            echo "Files extracted from ZIP:"
+            find extracted -maxdepth 4 -type f | head -200
             exit 1
           fi
+
+          if [[ ! -f "$PROJECT_DIR/build.gradle" && ! -f "$PROJECT_DIR/build.gradle.kts" ]]; then
+            echo "Root build.gradle or build.gradle.kts not found in: $PROJECT_DIR"
+            exit 1
+          fi
+          if [[ ! -d "$PROJECT_DIR/app" ]]; then
+            echo "Android app module directory not found: $PROJECT_DIR/app"
+            find "$PROJECT_DIR" -maxdepth 3 -type f | head -200
+            exit 1
+          fi
+
+          echo "Building project from: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Java

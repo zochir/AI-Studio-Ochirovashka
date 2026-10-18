@@ -36,7 +36,7 @@ const context = {
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
-  setTimeout: fn => fn(), clearTimeout,
+  setTimeout: (fn, ms) => { if (ms === 8000 || ms >= 10000) return 999999; fn(); return 1; }, clearTimeout: () => {},
   fetch: async (url, options) => {
     const request = options && options.body ? JSON.parse(options.body) : {};
     if (url === 'https://api.test/v1/chat/completions') {

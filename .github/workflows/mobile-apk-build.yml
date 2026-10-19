@@ -297,7 +297,12 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/apk-output"
           cp "$APK" "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk"
           unzip -t "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk" >/dev/null
-          unzip -l "$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk" | grep -q "assets/index.html"
+          APK="$GITHUB_WORKSPACE/apk-output/AI-Studio-Ochirovashka-debug.apk"
+          unzip -l "$APK" | grep -q "assets/index.html"
+          unzip -l "$APK" | grep -q "assets/tokenizer.mtok"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libMNN.so"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libcomicdiffusion.so"
+          echo "Verified APK contains Comic Studio UI, tokenizer, MNN runtime, and JNI diffusion bridge."
           (cd "$GITHUB_WORKSPACE/apk-output" && sha256sum AI-Studio-Ochirovashka-debug.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
 
       - name: Upload installable APK

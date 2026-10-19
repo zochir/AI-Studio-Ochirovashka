@@ -60,14 +60,15 @@ module = r"""
  let failedImageFrames=new Set();
  let characterReferenceDataUrl="";
  const PROJECT_KEY="ai-studio-comic-project-v1";
- window.nativeComicImageResult=function(id,data,error){
+ const nativeRoot=typeof window!=="undefined"?window:globalThis;
+ nativeRoot.nativeComicImageResult=function(id,data,error){
   if(Number(id)!==nativeImageRequest)return;
   if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
  };
- window.nativeComicModelProgress=function(id,percent,message,done){
+ nativeRoot.nativeComicModelProgress=function(id,percent,message,done){
   if(Number(id)!==nativeModelRequest)return;
   $("comicNativeModelProgress").textContent=(percent<0?"Ошибка загрузки: ":("Загрузка модели — "+percent+"%: "))+message;
   $("comicDownloadNativeModel").disabled=!done;
@@ -495,21 +496,21 @@ module = r"""
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
- $("comicCheckNative").addEventListener("click",()=>{if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=window.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
+ $("comicCheckNative").addEventListener("click",()=>{if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=nativeRoot.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
  $("comicDownloadNativeModel").addEventListener("click",()=>{
-  if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.downloadModel!=="function"){$("comicNativeModelProgress").textContent="Нативный движок отсутствует в этой сборке.";return;}
+  if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.downloadModel!=="function"){$("comicNativeModelProgress").textContent="Нативный движок отсутствует в этой сборке.";return;}
   if(!confirm("Скачать на телефон модель Stable Diffusion размером около 1,15 ГБ? Нужен Wi-Fi или безлимитный интернет и дополнительное свободное место. Загрузка начнётся только после подтверждения."))return;
   const id=++nativeModelRequest;$("comicDownloadNativeModel").disabled=true;$("comicNativeModelProgress").textContent="Подключение к репозиторию модели…";
-  window.AndroidDiffusion.downloadModel(String(id));
+  nativeRoot.AndroidDiffusion.downloadModel(String(id));
  });
  $("comicGenerateNative").addEventListener("click",()=>{
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.generate!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}
-  const state=window.AndroidDiffusion.status();
+  if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.generate!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}
+  const state=nativeRoot.AndroidDiffusion.status();
   if(state!=="MODEL_PRESENT"){$("comicStatus").textContent="Сначала скачайте модель. Статус: "+state;return;}
   const prompt=[panels[0].scene,$("comicCharacters").value,$("comicStyle").value,$("comicMood").value,"cinematic composition, detailed, coherent character appearance, no text, no watermark"].filter(Boolean).join(", ");
   const id=++nativeImageRequest;$("comicGenerateNative").disabled=true;$("comicStatus").textContent="Генерация первого кадра на телефоне. Это может занять несколько минут.";
-  window.nativeComicImageResult=function(callbackId,data,error){
+  nativeRoot.nativeComicImageResult=function(callbackId,data,error){
    if(Number(callbackId)!==nativeImageRequest)return;
    $("comicGenerateNative").disabled=false;
    if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
@@ -517,7 +518,7 @@ module = r"""
    if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
    panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
   };
-  window.AndroidDiffusion.generate(prompt,String(id));
+  nativeRoot.AndroidDiffusion.generate(prompt,String(id));
  });
  $("comicBuildWorkflow").addEventListener("click",buildBasicComfyWorkflow);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));

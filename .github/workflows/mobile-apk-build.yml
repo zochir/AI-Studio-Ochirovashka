@@ -146,7 +146,7 @@ jobs:
           mkdir -p /tmp/mnn-runtime
           unzip -q /tmp/mnn-runtime.zip -d /tmp/mnn-runtime
           test -s /tmp/mnn-runtime/arm64-v8a/libMNN.so
-          (cd /tmp/mnn-runtime && sha256sum -c SHA256SUMS.txt)
+          sed 's#runtime-artifact/##' /tmp/mnn-runtime/SHA256SUMS.txt | (cd /tmp/mnn-runtime && sha256sum -c -)
           echo "MNN_RUNTIME_SOURCE_RUN=$run_id" >> "$GITHUB_ENV"
           echo "MNN_RUNTIME_ARTIFACT_ID=$artifact_id" >> "$GITHUB_ENV"
           echo "Verified runtime artifact $artifact_id from run $run_id"

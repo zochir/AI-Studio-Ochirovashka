@@ -134,6 +134,35 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Probe official MNN Android runtime for diffusion symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/alibaba/MNN/releases/download/3.6.1/mnn_3.6.1_android_armv7_armv8_cpu_opencl_vulkan.zip"
+          curl --fail --location --retry 3 --silent --show-error "$url" -o /tmp/mnn-android-runtime.zip
+          echo "Downloaded official MNN Android runtime; archive SHA-256:"
+          sha256sum /tmp/mnn-android-runtime.zip
+          unzip -l /tmp/mnn-android-runtime.zip | sed -n '1,100p'
+          mkdir -p /tmp/mnn-runtime-probe
+          unzip -q /tmp/mnn-android-runtime.zip -d /tmp/mnn-runtime-probe
+          mapfile -t libs < <(find /tmp/mnn-runtime-probe -type f -name 'libMNN.so' | head -20)
+          if [[ ${#libs[@]} -eq 0 ]]; then
+            echo "::warning::Official archive contains no libMNN.so at expected paths; local diffusion integration remains blocked."
+            exit 0
+          fi
+          for lib in "${libs[@]}"; do
+            echo "--- Inspecting ${lib} ---"
+            file "$lib"
+            if nm -D -C "$lib" 2>/dev/null | grep -E 'MNN::DIFFUSION::Diffusion::createDiffusion|Diffusion::createDiffusion' | head -5; then
+              echo "MNN_DIFFUSION_SYMBOLS_FOUND=true" >> "$GITHUB_ENV"
+            else
+              echo "No exported Diffusion::createDiffusion symbol in this binary."
+            fi
+          done
+          if [[ "${MNN_DIFFUSION_SYMBOLS_FOUND:-false}" != "true" ]]; then
+            echo "::warning::Prebuilt Android runtime does not expose the required diffusion entry point; do not link it as a local image generator."
+          fi
+
       - name: Build debug APK
         timeout-minutes: 10
         shell: bash

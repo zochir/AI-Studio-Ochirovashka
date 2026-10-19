@@ -208,6 +208,8 @@ jobs:
           done
           test "$total" -gt 1000000000 || { echo "Model size is unexpectedly small: $total"; exit 1; }
           # Exercise both integrity paths against small files only; never fetch the large weights in CI.
+          echo "Diagnostic text_encoder.mnn metadata:"
+          jq -c '.[] | select(.path=="text_encoder.mnn") | {oid,lfs,xetHash,xet_hash,size}' "$manifest"
           for file in alphas.txt text_encoder.mnn; do
             item="$(jq -c --arg file "$file" '[.[] | select(.path==$file)][0] // empty' "$manifest")"
             expected_oid="$(jq -r 'if .lfs.sha256 then ("sha256:" + .lfs.sha256) else .oid end' <<<"$item")"

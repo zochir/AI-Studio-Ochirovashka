@@ -9,6 +9,8 @@ module = r"""
 <!-- AI_STUDIO_COMIC_MODULE_V1 -->
 <style>
 #comicLab{margin:16px auto;padding:16px;max-width:1050px;border:1px solid #cbd5e1;border-radius:16px;background:#fff;color:#172033;font:inherit}
+/* Make Comic Studio the actual first screen instead of leaving it below the legacy news editor. */
+body > *:not(#comicLab):not(script):not(style){display:none!important}
 #comicLab *{box-sizing:border-box}#comicLab label{display:block;margin:10px 0 5px;font-weight:600}
 #comicLab textarea,#comicLab input,#comicLab select{display:block;width:100%;min-height:44px;padding:11px;border:1px solid #94a3b8;border-radius:10px;font:inherit}
 #comicLab textarea{min-height:unset}

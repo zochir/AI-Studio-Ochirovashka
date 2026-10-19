@@ -22,7 +22,7 @@ class OnDeviceDiffusionBridge(private val activity: Activity) {
         val nativeDir = File(activity.applicationInfo.nativeLibraryDir)
         val libraryNames = listOf("libmnnllmapp.so", "libmnn_diffusion.so")
         val presentLibraries = JSONArray()
-        libraryNames.filter { File(nativeDir, it).isFile }.forEach(presentLibraries::put)
+        libraryNames.filter { File(nativeDir, it).isFile }.forEach { presentLibraries.put(it) }
 
         val modelFiles = JSONArray()
         val root = modelDirectory

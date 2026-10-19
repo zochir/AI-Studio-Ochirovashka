@@ -98,6 +98,9 @@ const context = {
     if (url === 'http://comfy.test:8188/history/local-job-1') {
       return { ok: true, json: async () => ({ 'local-job-1': { outputs: { '9': { images: [{ filename: 'comic.png', subfolder: '', type: 'output' }] } } } }) };
     }
+    if (url === 'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output') {
+      return { ok: true, blob: async () => new Blob([new Uint8Array([9,8,7,6])], {type:'image/png'}) };
+    }
     throw new Error('Unexpected network endpoint: ' + url);
   },
   JSON, String, Number, Array, Math, Promise, URLSearchParams
@@ -244,5 +247,12 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(els.comicRetryImages.disabled, true, 'local retry button should disable when failures are cleared');
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
-  console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export');
+  const externalImageProject = {format:'ai-comic-studio-project',version:1,story:'Portable image test',characters:'Hero',mood:'Adventure',composition:'Wide',count:'1',style:'Comic',panels:[{title:'Local frame',scene:'Local generated image',dialogue:'',imageUrl:'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output'}]};
+  els.comicProjectFile.listeners.change({target:{files:[{content:JSON.stringify(externalImageProject)}],value:'external.json'}});
+  await els.comicExportProject.click();
+  const portableJson = await blobs.at(-1).text();
+  assert.match(portableJson, /data:image\/png;base64,CQgHBg==/, 'portable project export should embed accessible ComfyUI images');
+  assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/, 'export should not mutate the live project image URL');
+  assert.match(els.comicStatus.textContent, /Все доступные изображения перенесены внутрь файла/);
+  console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export with embedded local images');
 })().catch(error => { console.error(error); process.exit(1); });

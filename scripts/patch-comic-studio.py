@@ -216,13 +216,14 @@ module = r"""
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
   if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
+  const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
+  if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных кадров для повтора.":"В проекте нет кадров.";return;}
   const providerName=endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"?"Pollinations":"внешний Images API";
-  if(typeof confirm==="function"&&!confirm("Перед отправкой запросов в "+providerName+" проверьте тариф и остаток квоты. Генерация может расходовать кредиты или быть платной. Продолжить?")){$("comicStatus").textContent="Генерация отменена: запросы не отправлялись.";return;}
+  const confirmationText="Будет отправлено "+indices.length+" запрос(ов) генерации в "+providerName+" — по одному на каждый кадр. Проверьте тариф и остаток квоты: запросы могут расходовать кредиты или быть платными. Продолжить?";
+  if(typeof confirm==="function"&&!confirm(confirmationText)){$("comicStatus").textContent="Генерация отменена: запросы не отправлялись.";return;}
   $("comicGenerateImages").disabled=true;
   try{
    let completed=0;const failures=[];
-   const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
-   if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных кадров для повтора.":"В проекте нет кадров.";return;}
    for(const i of indices){
     $("comicStatus").textContent=(retryOnly?"Повторная генерация кадра ":"Генерация изображения ")+(i+1)+" из "+panels.length+"…";
     try{

@@ -129,6 +129,16 @@ class AndroidDiffusionBridge(
         }
     }
 
+    fun close() {
+        executor.execute {
+            if (nativeHandle != 0L) {
+                try { nativeRelease(nativeHandle) } catch (_: Throwable) {}
+                nativeHandle = 0L
+            }
+        }
+        executor.shutdown()
+    }
+
     private fun isValidPng(file: File): Boolean {
         if (!file.isFile || file.length() < 33L) return false
         val header = ByteArray(24)

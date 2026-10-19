@@ -214,12 +214,53 @@ class AndroidDiffusionBridge(
         if (!modelDir.exists() && !modelDir.mkdirs()) {
             throw IllegalStateException("Не удалось создать каталог модели в хранилище приложения.")
         }
+        if (!modelDir.isDirectory) {
+            throw IllegalStateException("Путь для локальной модели не является каталогом.")
+        }
+
+        // The APK build writes this digest next to the tokenizer. Copy through a temporary
+        // file and verify it before replacing the installed copy, so interrupted or corrupted
+        // asset copies cannot be mistaken for a usable tokenizer.
+        val expected = appContext.assets.open("tokenizer.sha256").bufferedReader(Charsets.UTF_8)
+            .use { it.readText().trim().split(Regex("\\s+")).firstOrNull().orEmpty() }
+        if (!expected.matches(Regex("[a-fA-F0-9]{64}"))) {
+            throw IllegalStateException("Некорректная контрольная сумма встроенного токенизатора.")
+        }
+
         val target = File(modelDir, "tokenizer.mtok")
-        if (!target.isFile || target.length() == 0L) {
+        if (target.isFile && target.length() > 0L && sha256(target).equals(expected, ignoreCase = true)) return
+
+        val part = File(modelDir, "tokenizer.mtok.part")
+        part.delete()
+        try {
             appContext.assets.open("tokenizer.mtok").use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                part.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            if (!part.isFile || part.length() == 0L || !sha256(part).equals(expected, ignoreCase = true)) {
+                throw IllegalStateException("Встроенный токенизатор не прошёл проверку SHA-256.")
+            }
+            if (target.exists() && !target.delete()) {
+                throw IllegalStateException("Не удалось заменить повреждённый токенизатор.")
+            }
+            if (!part.renameTo(target)) {
+                throw IllegalStateException("Не удалось установить токенизатор.")
+            }
+        } finally {
+            part.delete()
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
             }
         }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private external fun nativeCreate(modelPath: String): Long

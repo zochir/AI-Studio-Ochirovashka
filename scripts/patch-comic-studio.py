@@ -514,7 +514,7 @@ if activity.is_file():
     if bridge_hook not in source:
         if host_hook not in source:
             raise SystemExit("Could not locate AndroidTTS JavaScript interface hook")
-        source = source.replace(host_hook, host_hook + "\\n        " + bridge_hook, 1)
+        source = source.replace(host_hook, host_hook + "\n        " + bridge_hook, 1)
         activity.write_text(source, encoding="utf-8")
 else:
     raise SystemExit("MainActivity.kt not found; native diffusion bridge cannot be exposed to WebView")

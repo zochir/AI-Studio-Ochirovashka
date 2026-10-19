@@ -247,7 +247,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(els.comicRetryImages.disabled, true, 'local retry button should disable when failures are cleared');
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
-  const externalImageProject = {format:'ai-comic-studio-project',version:1,story:'Portable image test',characters:'Hero',mood:'Adventure',composition:'Wide',count:'1',style:'Comic',panels:[{title:'Local frame',scene:'Local generated image',dialogue:'',imageUrl:'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output'}]};
+  const externalImageProject = {format:'ai-comic-studio-project',version:1,story:'Portable image test',characters:'Hero',mood:'Adventure',composition:'Wide',count:'1',style:'Comic',panels:[{title:'Local frame',scene:'Local generated image',dialogue:'Сохрани этот момент',imageUrl:'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output'}]};
   els.comicProjectFile.listeners.change({target:{files:[{content:JSON.stringify(externalImageProject)}],value:'external.json'}});
   await els.comicExportProject.click();
   const portableJson = await blobs.at(-1).text();

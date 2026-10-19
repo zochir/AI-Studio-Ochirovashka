@@ -198,7 +198,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicStory.value = 'перезаписанный сюжет';
   els.comicPanels.innerHTML = '';
   els.comicLoad.click();
-  assert.equal(els.comicStory.value, 'Героиня отправляется в горы. Она замечает загадочный свет. Находит древнюю дверь. Дверь открывается.');
+  assert.equal(els.comicStory.value, 'Героиня ведёт армию через горы. Она замечает вражеский легион. Начинается сражение. Герои одерживают победу.');
   assert.equal(els.comicImageEndpoint.value, 'https://images.test/v1/images/generations');
   assert.equal(els.comicLocalEndpoint.value, 'http://comfy.test:8188');
   assert.equal(els.comicWorkflow.value, '{"1":{"inputs":{"text":"__PROMPT__"}}}');

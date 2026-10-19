@@ -113,6 +113,7 @@ module = r"""
    $("comicImageModel").value=String(data.imageModel||"");
    $("comicLocalEndpoint").value=String(data.localEndpoint||"");
    $("comicWorkflow").value=String(data.workflow||"");
+   failedImageFrames.clear();$("comicRetryImages").disabled=true;
    render(data.panels);
    $("comicStatus").textContent="Проект загружен ("+panels.length+" кадров).";
   }catch(e){$("comicStatus").textContent="Не удалось загрузить проект: "+e.message;}
@@ -159,6 +160,7 @@ module = r"""
     $("comicEndpoint").value=String(data.endpoint||"");$("comicModel").value=String(data.model||"");
     $("comicImageEndpoint").value=String(data.imageEndpoint||"");$("comicImageModel").value=String(data.imageModel||"");
     $("comicLocalEndpoint").value=String(data.localEndpoint||"");$("comicWorkflow").value=String(data.workflow||"");
+    failedImageFrames.clear();$("comicRetryImages").disabled=true;
     render(data.panels);saveProject();$("comicStatus").textContent="Проект импортирован: "+panels.length+" кадров. Секретные ключи API нужно ввести заново.";
    }catch(e){$("comicStatus").textContent="Не удалось импортировать проект: "+e.message;}
   };
@@ -177,8 +179,10 @@ module = r"""
     if(!raw)throw Error("В ответе текстового API нет сценария.");
     const parsed=JSON.parse(String(raw).replace(/^\x60\x60\x60(?:json)?\s*/i,"").replace(/\s*\x60\x60\x60$/,""));
     if(!Array.isArray(parsed)||!parsed.length)throw Error("Ожидался JSON-массив кадров.");
-    render(parsed.slice(0,n));$("comicStatus").textContent="Сценарий создан ИИ. Следующий шаг — сгенерировать изображения кадров.";
+    failedImageFrames.clear();$("comicRetryImages").disabled=true;
+   render(parsed.slice(0,n));$("comicStatus").textContent="Сценарий создан ИИ. Следующий шаг — сгенерировать изображения кадров.";
    }else{
+    failedImageFrames.clear();$("comicRetryImages").disabled=true;
     render(localScenes(story,n));$("comicStatus").textContent="Создана локальная текстовая раскадровка. Для сценария от ИИ укажите настройки текстового API.";
    }
   }catch(e){$("comicStatus").textContent="Ошибка сценария: "+e.message;}

@@ -35,7 +35,7 @@ module = r"""
 <label for="comicKey">Ключ текстового API</label><input id="comicKey" type="password" autocomplete="off">
 </details>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки генерации изображений</summary>
-<p class="comic-note">Поддерживается формат OpenAI Images API: POST endpoint с полями model, prompt, size, n; ответ data[0].url или data[0].b64_json. Для локального совместимого сервера ключ можно оставить пустым. Обычно для каждого кадра нужен отдельный запрос.</p>
+<p class="comic-note">Есть два режима: OpenAI-compatible Images API и Pollinations. Pollinations требует API-ключ с сайта провайдера; доступность и стоимость зависят от вашей квоты и выбранной модели. Не публикуйте секретный ключ.</p><button id="comicUsePollinations" type="button">Настроить Pollinations</button><p class="comic-note">Обычный Images API: POST с model, prompt, size, n; ответ data[0].url или data[0].b64_json. Кнопка Pollinations переключает генератор на прямой image endpoint.</p>
 <label for="comicImageEndpoint">Images endpoint</label><input id="comicImageEndpoint" type="url" placeholder="https://example.com/v1/images/generations">
 <label for="comicImageModel">Модель изображений</label><input id="comicImageModel" placeholder="image-model">
 <label for="comicImageKey">Ключ API изображений</label><input id="comicImageKey" type="password" autocomplete="off">
@@ -156,36 +156,22 @@ module = r"""
   try{
    if(endpoint){
     if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
-    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев, причинно-следственную связь, разнообразие планов и эмоций. Учитывай паспорт персонажей и атмосферу."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Атмосфера: "+mood+". Композиция: "+composition+". Паспорт персонажей: "+(characters||"создай подходящих сюжету героев и сохраняй их внешний вид")+". Сюжет: "+story}]})});
-    if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
-    const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
-    if(!raw)throw Error("В ответе текстового API нет сценария.");
-    const parsed=JSON.parse(String(raw).replace(/^\x60\x60\x60(?:json)?\s*/i,"").replace(/\s*\x60\x60\x60$/,""));
-    if(!Array.isArray(parsed)||!parsed.length)throw Error("Ожидался JSON-массив кадров.");
-    render(parsed.slice(0,n));$("comicStatus").textContent="Сценарий создан ИИ. Следующий шаг — сгенерировать изображения кадров.";
-   }else{
-    render(localScenes(story,n));$("comicStatus").textContent="Создана локальная текстовая раскадровка. Для сценария от ИИ укажите настройки текстового API.";
-   }
-  }catch(e){$("comicStatus").textContent="Ошибка сценария: "+e.message;}
-  finally{$("comicGenerate").disabled=false;}
- }
- async function generateImages(){
-  const endpoint=$("comicImageEndpoint").value.trim(),model=$("comicImageModel").value.trim(),key=$("comicImageKey").value;
-  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
-  if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
-  $("comicGenerateImages").disabled=true;
-  try{
-   let completed=0;
-   for(let i=0;i<panels.length;i++){
-    $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
-    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
-    if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
-    const data=await res.json(),item=data.data&&data.data[0];
-    if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
-    const imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
-    if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит url или b64_json.");
+    let imageUrl="";
+    if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
+     const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
+     const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}});
+     if(!res.ok)throw Error("Pollinations вернул HTTP "+res.status+" на кадре "+(i+1));
+     const blob=await res.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+     for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
+     imageUrl="data:"+(blob.type||"image/jpeg")+";base64,"+btoa(binary);
+    }else{
+     const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
+     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
+     const data=await res.json(),item=data.data&&data.data[0];
+     if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
+     imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
+    }
+    if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
     panels[i].imageUrl=imageUrl;completed++;render(panels);
    }
    $("comicStatus").textContent="Готово: изображения получены для "+completed+" из "+panels.length+" кадров.";
@@ -282,6 +268,7 @@ module = r"""
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",generateImages);
+ $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);
  $("comicExport").addEventListener("click",exportSvg);

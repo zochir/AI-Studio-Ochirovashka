@@ -18,7 +18,7 @@ class Element {
 }
 const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
-  'comicSave', 'comicLoad', 'comicExport', 'comicStatus', 'comicPanels'];
+  'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicCharacters.value = 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.';
@@ -34,8 +34,11 @@ const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
   createElement: tag => { const el = new Element(tag); anchors.push(el); return el; }
 };
+class FakeFileReader {
+  readAsText(file) { this.result = file.content; if (this.onload) this.onload(); }
+}
 const context = {
-  document, console, Blob,
+  document, console, Blob, FileReader: FakeFileReader,
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
@@ -150,7 +153,17 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicAddCharacter.click();
   assert.match(els.comicCharacters.value, /Тар — синяя броня, серебряные глаза, шрам над бровью/);
   assert.match(els.comicStatus.textContent, /Карточка персонажа «Тар» добавлена/);
+  await els.comicExportProject.click();
+  assert.match(els.comicStatus.textContent, /Проект JSON экспортирован/);
+  assert.equal(anchors.at(-1).download, 'comic-project.json');
+  const portable = {format:'ai-comic-studio-project',version:1,story:'Импортированный сюжет',characters:'Герой — плащ',mood:'Меланхоличная',composition:'Портрет и эмоции',count:'3',style:'Манга',panels:[{title:'Первый кадр',scene:'Проверка импорта',dialogue:'Готово',imageUrl:'data:image/png;base64,ZmFrZQ=='}]};
+  els.comicProjectFile.listeners.change({target:{files:[{content:JSON.stringify(portable)}],value:'selected.json'}});
+  assert.equal(els.comicStory.value, 'Импортированный сюжет');
+  assert.match(els.comicPanels.innerHTML, /Проверка импорта/);
+  assert.match(els.comicStatus.textContent, /Проект импортирован: 1 кадров/);
+  els.comicProjectFile.listeners.change({target:{files:[{content:'{}'}],value:'bad.json'}});
+  assert.match(els.comicStatus.textContent, /неподдерживаемый формат/);
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
-  console.log('PASS: storyboard, character bible persistence, visual variation controls, keyed/keyless text and image APIs, ComfyUI validation/integration, SVG export');
+  console.log('PASS: storyboard, character bible, text/image APIs, ComfyUI adapter, SVG and portable JSON project import/export');
 })().catch(error => { console.error(error); process.exit(1); });

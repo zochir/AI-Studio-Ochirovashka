@@ -19,6 +19,15 @@ module = r"""
 #comicLab #comicGenerateImages{background:#4338ca;width:100%;min-height:52px;font-size:1.05em}
 #comicLab #comicSave,#comicLab #comicLoad{background:#0f766e}
 #comicLab #comicExportProject,#comicLab #comicExport,#comicLab #comicExportPng,#comicLab #comicExportHtml{background:#64748b}
+#comicLab .comic-main-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:16px}
+#comicLab .comic-main-actions button{width:100%;min-height:54px;margin:0;font-size:1.05em;text-align:left;padding:14px 16px}
+#comicLab .comic-main-actions .comic-primary{background:#4338ca}
+#comicLab .comic-main-actions .comic-primary-art{background:#0f766e}
+#comicLab .comic-main-actions .comic-primary-save{background:#475569}
+#comicLab .comic-secondary{background:#64748b}
+#comicLab .comic-file-tools{margin-top:12px}
+#comicLab .comic-file-tools button{background:#64748b}
+#comicLab .comic-file-tools summary{font-weight:700}
 #comicLab .comic-note{font-size:.9em;line-height:1.5;opacity:.9}
 #comicLab details{margin:12px 0;padding:12px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc}
 #comicLab details summary{cursor:pointer;line-height:1.4;padding:4px 0}
@@ -56,9 +65,21 @@ module = r"""
 <label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>
 <button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicCheckNative" type="button">Проверить локальный движок Android</button><button id="comicDownloadNativeModel" type="button">Скачать модель на телефон (≈1,15 ГБ)</button><button id="comicGenerateNative" type="button">Сгенерировать первый кадр на телефоне</button><p id="comicNativeModelProgress" class="comic-note" role="status">Локальная модель не скачивается автоматически. Для загрузки требуется свободное место и явное подтверждение.</p><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
 </details>
-<button id="comicGenerate" type="button">Создать раскадровку</button>
-<button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
-<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button><button id="comicExportPng" type="button">Экспорт PNG-страницы</button><button id="comicExportHtml" type="button">Экспорт готового комикса HTML</button>
+<div class="comic-main-actions" aria-label="Основные действия">
+<button id="comicGenerate" class="comic-primary" type="button">1. Создать историю</button>
+<button id="comicGenerateImages" class="comic-primary comic-primary-art" type="button">2. Нарисовать комикс</button>
+<button id="comicSave" class="comic-primary comic-primary-save" type="button">3. Сохранить</button>
+</div>
+<button id="comicRetryImages" class="comic-secondary" type="button" disabled>Повторить неудачные кадры</button>
+<details class="comic-file-tools"><summary>Открыть проект или экспортировать</summary>
+<button id="comicLoad" type="button">Открыть сохранённый проект</button>
+<button id="comicExportHtml" type="button">Экспортировать готовый комикс</button>
+<button id="comicExportPng" type="button">Сохранить страницу как PNG</button>
+<button id="comicExport" type="button">Сохранить страницу как SVG</button>
+<button id="comicExportProject" type="button">Экспорт проекта (JSON)</button>
+<button id="comicImportProject" type="button">Импорт проекта (JSON)</button>
+<input id="comicProjectFile" type="file" accept="application/json,.json" hidden>
+</details>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
 <script>

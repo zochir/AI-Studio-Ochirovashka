@@ -87,7 +87,7 @@ module = r"""
  function render(items){
   panels=items.map((p,i)=>({title:String(p.title||("Кадр "+(i+1))),scene:String(p.scene||p.description||""),dialogue:String(p.dialogue||""),imageUrl:p.imageUrl||""}));
   $("comicPanels").innerHTML=panels.map((p,i)=>'<article class="comic-panel">'+(p.imageUrl?'<img class="comic-art" alt="Иллюстрация кадра '+(i+1)+'" src="'+esc(p.imageUrl)+'">':'<div class="comic-art comic-art-placeholder">Иллюстрация ещё не создана<br>Настройте генератор и нажмите «Сгенерировать изображения кадров»</div>')+'<h3>Кадр '+(i+1)+' — редактирование</h3><label>Название кадра</label><input data-panel-index="'+i+'" data-panel-field="title" aria-label="Название кадра '+(i+1)+'" value="'+esc(p.title)+'"><label>Описание сцены</label><textarea data-panel-index="'+i+'" data-panel-field="scene" aria-label="Описание сцены '+(i+1)+'" rows="3">'+esc(p.scene)+'</textarea><label>Реплика</label><textarea data-panel-index="'+i+'" data-panel-field="dialogue" aria-label="Реплика кадра '+(i+1)+'" rows="2">'+esc(p.dialogue)+'</textarea></article>').join("");
-  $("comicPanels").querySelectorAll("[data-panel-index][data-panel-field]").forEach(input=>input.addEventListener("input",()=>{
+  if($("comicPanels").querySelectorAll)$("comicPanels").querySelectorAll("[data-panel-index][data-panel-field]").forEach(input=>input.addEventListener("input",()=>{
    const i=Number(input.getAttribute("data-panel-index")),field=input.getAttribute("data-panel-field");
    if(panels[i]&&["title","scene","dialogue"].includes(field)){panels[i][field]=input.value;$("comicStatus").textContent="Изменения кадра "+(i+1)+" внесены. Нажмите «Сохранить проект», чтобы сохранить их на устройстве.";}
   }));

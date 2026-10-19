@@ -179,6 +179,9 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   const exportedImageSvg = await blobs[blobs.length - 1].text();
   assert.match(exportedImageSvg, /<image[^>]+href="data:image\/png;base64,ZmFrZQ=="/);
   assert.match(exportedImageSvg, /Hello/);
+  // Restore optional local-provider settings before verifying they survive project save/load.
+  els.comicLocalEndpoint.value = 'http://comfy.test:8188';
+  els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
   els.comicSave.click();
   assert.match(els.comicStatus.textContent, /Проект сохранён/);
   const storedProject = [...saved.values()][0];

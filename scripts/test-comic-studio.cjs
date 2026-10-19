@@ -18,7 +18,7 @@ class Element {
 }
 const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
-  'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicStatus', 'comicPanels'];
+  'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicCharacters.value = 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.';
@@ -192,9 +192,14 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicImageModel.value = 'test-model';
   await els.comicGenerateImages.click();
   assert.equal(failingImageRequests, 2, 'queue must continue after the first frame fails');
-  assert.match(els.comicStatus.textContent, /завершена частично: готово 1 из 2/);
+  assert.match(els.comicStatus.textContent, /завершена частично: в этом запуске готово 1 из 2/);
   assert.match(els.comicStatus.textContent, /temporary provider overload/);
-  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,c2Vjb25k/);
+  assert.match(els.comicPanels.innerHTML, /data:image\\/png;base64,c2Vjb25k/);
+  assert.equal(els.comicRetryImages.disabled, false, 'retry button should enable after a frame failure');
+  await els.comicRetryImages.click();
+  assert.equal(failingImageRequests, 3, 'retry action must request only the failed first frame');
+  assert.match(els.comicStatus.textContent, /создано 1 изображений. Неудачных кадров осталось: 0/);
+  assert.equal(els.comicRetryImages.disabled, true, 'retry button should disable when no failed frames remain');
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
   console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export');

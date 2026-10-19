@@ -207,7 +207,27 @@ jobs:
             echo "$file: $size bytes; integrity identifier present"
           done
           test "$total" -gt 1000000000 || { echo "Model size is unexpectedly small: $total"; exit 1; }
-          echo "Pinned model manifest validated; total bytes: $total. No model weights downloaded in CI."
+          # Exercise both integrity paths against small files only; never fetch the large weights in CI.
+          for file in alphas.txt text_encoder.mnn; do
+            item="$(jq -c --arg file "$file" '[.[] | select(.path==$file)][0] // empty' "$manifest")"
+            expected_oid="$(jq -r 'if .lfs.oid then .lfs.oid else .oid end' <<<"$item")"
+            expected_size="$(jq -r 'if .lfs.size then .lfs.size else .size end' <<<"$item")"
+            sample="/tmp/sd15-sample-$file"
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://huggingface.co/taobao-mnn/stable-diffusion-v1-5-mnn-opencl/resolve/0dc4a5dbcee59a83bbc9694d13b10b4a7de4adc2/$file?download=true" \
+              -o "$sample"
+            actual_size="$(wc -c < "$sample" | tr -d ' ')"
+            test "$actual_size" -eq "$expected_size"
+            if [[ "$expected_oid" == sha256:* ]]; then
+              actual_oid="$(sha256sum "$sample" | awk '{print $1}')"
+              expected_oid="${expected_oid#sha256:}"
+            else
+              actual_oid="$({ printf 'blob %s\\0' "$expected_size"; cat "$sample"; } | sha1sum | awk '{print $1}')"
+            fi
+            test "$actual_oid" = "$expected_oid" || { echo "Integrity verification failed for $file"; exit 1; }
+            echo "Downloaded and verified small manifest sample: $file ($actual_size bytes)"
+          done
+          echo "Pinned model manifest and both Git/LFS integrity paths validated. Large weights were not downloaded in CI."
 
       - name: Compile Android JNI bridge and package MNN runtime
         shell: bash

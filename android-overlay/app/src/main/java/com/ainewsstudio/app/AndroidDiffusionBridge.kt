@@ -22,6 +22,7 @@ class AndroidDiffusionBridge(
 
     @JavascriptInterface
     fun status(): String {
+        if (!nativeAvailable) return "NATIVE_UNAVAILABLE"
         val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
         val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
         return if (missing.isEmpty()) "MODEL_PRESENT" else "MODEL_MISSING:" + missing.joinToString(",")
@@ -31,6 +32,7 @@ class AndroidDiffusionBridge(
     fun generate(prompt: String, callbackId: String) {
         executor.execute {
             val result = try {
+                if (!nativeAvailable) throw IllegalStateException("Нативная библиотека недоступна для ABI этого устройства.")
                 val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
                 val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
                 if (missing.isNotEmpty()) {
@@ -67,9 +69,12 @@ class AndroidDiffusionBridge(
     private external fun nativeRelease(handle: Long)
 
     companion object {
-        init {
+        private val nativeAvailable: Boolean = try {
             System.loadLibrary("MNN")
             System.loadLibrary("comicdiffusion")
+            true
+        } catch (_: UnsatisfiedLinkError) {
+            false
         }
     }
 }

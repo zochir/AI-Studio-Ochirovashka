@@ -102,7 +102,7 @@ module = r"""
   if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
+  panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
  };
  nativeRoot.nativeComicModelProgress=function(id,percent,message,done){
   if(Number(id)!==nativeModelRequest)return;
@@ -620,7 +620,7 @@ module = r"""
    if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
    if(!data||!String(data).startsWith("data:image/png;base64,")){$("comicStatus").textContent="Движок не вернул корректный PNG.";return;}
    if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-   panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
+   panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
   };
   // Native inference can stall on unsupported model/runtime combinations. Restore the UI
   // after six minutes and invalidate late callbacks; this does not claim to cancel JNI work.

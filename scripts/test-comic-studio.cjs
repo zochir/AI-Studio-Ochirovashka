@@ -194,7 +194,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(failingImageRequests, 2, 'queue must continue after the first frame fails');
   assert.match(els.comicStatus.textContent, /завершена частично: в этом запуске готово 1 из 2/);
   assert.match(els.comicStatus.textContent, /temporary provider overload/);
-  assert.match(els.comicPanels.innerHTML, /data:image\\/png;base64,c2Vjb25k/);
+  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,c2Vjb25k/);
   assert.equal(els.comicRetryImages.disabled, false, 'retry button should enable after a frame failure');
   await els.comicRetryImages.click();
   assert.equal(failingImageRequests, 3, 'retry action must request only the failed first frame');

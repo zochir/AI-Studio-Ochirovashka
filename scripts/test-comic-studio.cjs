@@ -33,6 +33,8 @@ const anchors = [];
 const blobs = [];
 const saved = new Map();
 let failingImageRequests = 0;
+let localPromptRequests = 0;
+let localFailNextPrompt = false;
 const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
   createElement: tag => { const el = new Element(tag); anchors.push(el); return el; }
@@ -83,7 +85,9 @@ const context = {
       return { ok: true, json: async () => ({ devices: [{ name: 'test-device' }] }) };
     }
     if (url === 'http://comfy.test:8188/prompt') {
-      assert.match(JSON.stringify(request), /AI scene/);
+      localPromptRequests++;
+      assert.match(JSON.stringify(request), /AI scene|First scene|Second scene/);
+      if (localFailNextPrompt) { localFailNextPrompt = false; return { ok: false, status: 503, text: async () => 'temporary local overload' }; }
       return { ok: true, json: async () => ({ prompt_id: 'local-job-1' }) };
     }
     if (url === 'http://comfy.test:8188/history/local-job-1') {
@@ -217,6 +221,19 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(failingImageRequests, 3, 'retry action must request only the failed first frame');
   assert.match(els.comicStatus.textContent, /создано 1 изображений. Неудачных кадров осталось: 0/);
   assert.equal(els.comicRetryImages.disabled, true, 'retry button should disable when no failed frames remain');
+  // ComfyUI retries must use the local provider and only requeue failed local frames.
+  els.comicLocalEndpoint.value = 'http://comfy.test:8188';
+  els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
+  localFailNextPrompt = true;
+  await els.comicGenerateLocal.click();
+  assert.equal(localPromptRequests, 2, 'local queue should attempt both frames even if the first fails');
+  assert.match(els.comicStatus.textContent, /завершена частично/);
+  assert.equal(els.comicRetryImages.disabled, false, 'local failure should enable retry');
+  const beforeLocalRetry = localPromptRequests;
+  await els.comicRetryImages.click();
+  assert.equal(localPromptRequests, beforeLocalRetry + 1, 'local retry should request only the failed frame');
+  assert.match(els.comicStatus.textContent, /Повтор локальных кадров завершён/);
+  assert.equal(els.comicRetryImages.disabled, true, 'local retry button should disable when failures are cleared');
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
   console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export');

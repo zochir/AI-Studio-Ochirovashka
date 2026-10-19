@@ -38,6 +38,9 @@ const anchors = [];
 const blobs = [];
 const saved = new Map();
 let failingImageRequests = 0;
+let externalImageRequests = 0;
+let confirmNext = true;
+let confirmationCalls = 0;
 let localPromptRequests = 0;
 let localLastRequest = null;
 let localFailNextPrompt = false;
@@ -56,7 +59,7 @@ class FakeFileReader {
 class FakeFormData { constructor(){this.values=[];} append(...args){this.values.push(args);} }
 const context = {
   document, console, Blob, Image: FakeImage, FileReader: FakeFileReader, FormData: FakeFormData,
-  confirm: () => true,
+  confirm: () => { confirmationCalls++; return confirmNext; },
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
@@ -69,6 +72,7 @@ const context = {
       return { ok: true, json: async () => ({ choices: [{ message: { content: '[{"title":"AI panel","scene":"AI scene","dialogue":"Hello"}]' } }] }) };
     }
     if (url === 'https://images.test/v1/images/generations') {
+      externalImageRequests++;
       if (options.headers.Authorization) assert.equal(options.headers.Authorization, 'Bearer image-test-key');
       assert.equal(request.model, 'image-test-model');
       assert.match(request.prompt, /AI scene/);
@@ -87,6 +91,7 @@ const context = {
       return { ok: true, json: async () => ({ data: [{ b64_json: failingImageRequests === 3 ? 'Zmlyc3Q=' : 'c2Vjb25k' }] }) };
     }
     if (url.startsWith('https://gen.pollinations.ai/image/')) {
+      externalImageRequests++;
       assert.equal(options.method, 'GET');
       assert.equal(options.headers.Authorization, 'Bearer pollinations-test-key');
       assert.match(decodeURIComponent(url), /AI scene/);
@@ -157,6 +162,13 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /создано 1 изображений/);
+  assert.equal(confirmationCalls, 1, 'external image generation must ask for explicit confirmation');
+  const requestsBeforeDecline = externalImageRequests;
+  confirmNext = false;
+  await els.comicGenerateImages.click();
+  assert.equal(externalImageRequests, requestsBeforeDecline, 'declining cost confirmation must send no external image requests');
+  assert.match(els.comicStatus.textContent, /Генерация отменена: запросы не отправлялись/);
+  confirmNext = true;
   await els.comicExport.click();
   const exportedImageSvg = await blobs[blobs.length - 1].text();
   assert.match(exportedImageSvg, /<image[^>]+href="data:image\/png;base64,ZmFrZQ=="/);

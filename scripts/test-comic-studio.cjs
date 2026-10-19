@@ -161,7 +161,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await els.comicGenerateImages.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
-  assert.match(els.comicPanels.innerHTML, /data:image\\/jpeg;base64,AQIDBA==/);
+  assert.ok(els.comicPanels.innerHTML.includes('data:image/jpeg;base64,AQIDBA=='));
   assert.equal(els.comicImageEndpoint.value, 'https://gen.pollinations.ai/image/');
 
   els.comicCharacterName.value = 'Тар';

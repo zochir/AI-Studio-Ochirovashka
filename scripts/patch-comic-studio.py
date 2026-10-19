@@ -372,7 +372,7 @@ module = r"""
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",()=>generateImages(false));
- $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())generateLocalImages(true);else generateImages(true);});
+ $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));

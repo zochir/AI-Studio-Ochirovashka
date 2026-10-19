@@ -375,7 +375,7 @@ module = r"""
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())generateLocalImages(true);else generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
- $("comicGenerateLocal").addEventListener("click",generateLocalImages);
+ $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));
  $("comicExport").addEventListener("click",()=>exportSvg("svg"));
  $("comicExportPng").addEventListener("click",()=>exportSvg("png"));
  $("comicSave").addEventListener("click",saveProject);

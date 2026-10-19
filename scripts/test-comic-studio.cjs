@@ -24,7 +24,7 @@ class Element {
   toBlob(callback, type) { callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type })); }
 }
 const ids = ['comicReferenceFile', 'comicReferenceStatus', 'comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
-  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
+  'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicBuildWorkflow', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicExportPng', 'comicExportHtml', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
@@ -95,6 +95,9 @@ const context = {
     }
     if (url === 'http://comfy.test:8188/system_stats') {
       return { ok: true, json: async () => ({ devices: [{ name: 'test-device' }] }) };
+    }
+    if (url === 'http://comfy.test:8188/object_info/CheckpointLoaderSimple') {
+      return { ok: true, json: async () => ({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [['realisticVision.safetensors', 'sd15.safetensors'], {}] } } } }) };
     }
     if (url === 'data:image/png;base64,cmVm') return { ok: true, blob: async () => new Blob([new Uint8Array([1,2,3])], {type:'image/png'}) };
     if (url === 'http://comfy.test:8188/upload/image') { assert.equal(options.method,'POST'); assert.ok(options.body instanceof FakeFormData); return {ok:true,json:async()=>({name:'character-reference.png',subfolder:''})}; }
@@ -183,6 +186,15 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicCheckLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /ComfyUI доступен/);
+  await els.comicBuildWorkflow.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const generatedWorkflow = JSON.parse(els.comicWorkflow.value);
+  assert.equal(generatedWorkflow['1'].class_type, 'CheckpointLoaderSimple');
+  assert.equal(generatedWorkflow['1'].inputs.ckpt_name, 'realisticVision.safetensors');
+  assert.equal(generatedWorkflow['2'].inputs.text, '__PROMPT__');
+  assert.equal(generatedWorkflow['5'].inputs.seed, '__SEED__');
+  assert.equal(generatedWorkflow['7'].class_type, 'SaveImage');
+  assert.match(els.comicStatus.textContent, /Базовый workflow создан/);
   els.comicWorkflow.value = '{"1":{"inputs":{"text":"static prompt"}}}';
   els.comicGenerateLocal.click();
   assert.match(els.comicStatus.textContent, /не содержит __PROMPT__/);

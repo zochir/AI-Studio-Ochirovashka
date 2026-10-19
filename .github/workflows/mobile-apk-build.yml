@@ -200,7 +200,7 @@ jobs:
           for file in alphas.txt text_encoder.mnn text_encoder.mnn.weight unet.mnn unet.mnn.weight vae_decoder.mnn vae_decoder.mnn.weight; do
             item="$(jq -c --arg file "$file" '[.[] | select(.path==$file)][0] // empty' "$manifest")"
             test -n "$item" || { echo "Pinned model manifest is missing $file"; exit 1; }
-            oid="$(jq -r 'if .lfs.oid then .lfs.oid else .oid end' <<<"$item")"
+            oid="$(jq -r 'if .lfs.sha256 then ("sha256:" + .lfs.sha256) else .oid end' <<<"$item")"
             size="$(jq -r 'if .lfs.size then .lfs.size else .size end' <<<"$item")"
             test -n "$oid" && test "$oid" != "null" && test "$size" -gt 0
             total=$((total + size))
@@ -210,7 +210,7 @@ jobs:
           # Exercise both integrity paths against small files only; never fetch the large weights in CI.
           for file in alphas.txt text_encoder.mnn; do
             item="$(jq -c --arg file "$file" '[.[] | select(.path==$file)][0] // empty' "$manifest")"
-            expected_oid="$(jq -r 'if .lfs.oid then .lfs.oid else .oid end' <<<"$item")"
+            expected_oid="$(jq -r 'if .lfs.sha256 then ("sha256:" + .lfs.sha256) else .oid end' <<<"$item")"
             expected_size="$(jq -r 'if .lfs.size then .lfs.size else .size end' <<<"$item")"
             sample="/tmp/sd15-sample-$file"
             curl --fail --location --retry 3 --silent --show-error \

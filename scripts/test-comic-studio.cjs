@@ -80,6 +80,7 @@ const context = {
       assert.match(request.prompt, /Лея: рыжие короткие волосы/);
       assert.match(request.prompt, /Динамичный ракурс/);
       assert.match(request.prompt, /immutable model-sheet canon/);
+      assert.match(request.prompt, /EPIC BATTLE DIRECTION/, 'epic mood should add cinematic battle direction to image prompts');
       assert.match(request.prompt, /Seed for repeatable rerenders/);
       assert.equal(Number.isInteger(request.seed), true, "image request should include a deterministic per-panel seed");
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
@@ -130,10 +131,11 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
 (async () => {
   els.comicGenerate.click();
   assert.match(els.comicStatus.textContent, /Введите идею или сюжет/);
-  els.comicStory.value = 'Героиня отправляется в горы. Она замечает загадочный свет. Находит древнюю дверь. Дверь открывается.';
+  els.comicStory.value = 'Героиня ведёт армию через горы. Она замечает вражеский легион. Начинается сражение. Герои одерживают победу.';
   els.comicGenerate.click();
   assert.equal((els.comicPanels.innerHTML.match(/<article/g) || []).length, 4);
   assert.match(els.comicStatus.textContent, /локальн/);
+  assert.match(els.comicPanels.innerHTML, /Визуальный этап сражения/, 'battle stories should become a staged cinematic combat sequence');
   await els.comicExport.click();
   assert.equal(anchors.length, 1);
   assert.equal(anchors[0].download, 'comic-storyboard.svg');

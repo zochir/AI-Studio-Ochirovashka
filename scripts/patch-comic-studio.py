@@ -8,13 +8,23 @@ end_marker = "<!-- /AI_STUDIO_COMIC_MODULE_V1 -->"
 module = r"""
 <!-- AI_STUDIO_COMIC_MODULE_V1 -->
 <style>
-#comicLab{margin:20px auto;padding:18px;max-width:1050px;border:1px solid #94a3b8;border-radius:14px;background:#fff;color:#172033;font:inherit}
+#comicLab{margin:16px auto;padding:16px;max-width:1050px;border:1px solid #cbd5e1;border-radius:16px;background:#fff;color:#172033;font:inherit}
 #comicLab *{box-sizing:border-box}#comicLab label{display:block;margin:10px 0 5px;font-weight:600}
-#comicLab textarea,#comicLab input,#comicLab select{display:block;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:8px;font:inherit}
+#comicLab textarea,#comicLab input,#comicLab select{display:block;width:100%;min-height:44px;padding:11px;border:1px solid #94a3b8;border-radius:10px;font:inherit}
+#comicLab textarea{min-height:unset}
 #comicLab .comic-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-#comicLab button{padding:10px 14px;border:0;border-radius:9px;margin:12px 8px 0 0;background:#4f46e5;color:#fff;font:inherit;font-weight:650}
-#comicLab button:disabled{opacity:.55}#comicLab .comic-note{font-size:.9em;line-height:1.45;opacity:.82}
+#comicLab button{min-height:44px;padding:11px 14px;border:0;border-radius:10px;margin:8px 8px 0 0;background:#475569;color:#fff;font:inherit;font-weight:650;line-height:1.25;white-space:normal;max-width:100%}
+#comicLab button:disabled{opacity:.55}
+#comicLab #comicGenerate{background:#334155}
+#comicLab #comicGenerateImages{background:#4338ca;width:100%;min-height:52px;font-size:1.05em}
+#comicLab #comicSave,#comicLab #comicLoad{background:#0f766e}
+#comicLab #comicExportProject,#comicLab #comicExport,#comicLab #comicExportPng,#comicLab #comicExportHtml{background:#64748b}
+#comicLab .comic-note{font-size:.9em;line-height:1.5;opacity:.9}
+#comicLab details{margin:12px 0;padding:12px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc}
+#comicLab details summary{cursor:pointer;line-height:1.4;padding:4px 0}
+#comicLab details[open]{background:#fff}
 #comicLab .comic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
+@media(max-width:480px){#comicLab{padding:12px}#comicLab button{width:100%;margin-right:0}#comicLab .comic-row{grid-template-columns:1fr}}
 #comicLab .comic-panel{border:2px solid #172033;border-radius:8px;background:#fff;color:#172033;overflow:hidden;box-shadow:3px 4px 0 #172033}
 #comicLab .comic-art{width:100%;aspect-ratio:1/1;display:grid;place-items:center;background:#e2e8f0;color:#334155;font-size:15px;text-align:center;padding:18px;object-fit:cover}#comicLab .comic-art-placeholder{font-weight:650;line-height:1.5}
 #comicLab .comic-panel h3,#comicLab .comic-panel p{margin:10px;line-height:1.4}
@@ -22,25 +32,25 @@ module = r"""
 <section id="comicLab" aria-labelledby="comicLabTitle">
 <h2 id="comicLabTitle">Комикс-студия</h2>
 <p class="comic-note" style="margin-top:-6px;font-weight:650">Разработчики: Очир Зулаев и Алиса</p>
-<p class="comic-note">Важно: «Создать раскадровку» формирует только текст кадров — это ещё не генерация рисунков. Серый блок означает, что изображение не создано. Встроенная локальная генерация MNN работает на телефоне после отдельной загрузки модели около 1,15 ГБ; скачивание не начинается автоматически. Также можно подключить ComfyUI или совместимый Images API. Ключ используется только в текущей сессии; для публичного приложения безопаснее обращаться к API через собственный сервер. Провайдер может блокировать прямые запросы из WebView через CORS.</p>
+<p class="comic-note"><strong>Краткий порядок работы:</strong> 1) введите сюжет и персонажей; 2) нажмите «Создать раскадровку»; 3) нажмите «Сгенерировать изображения кадров»; 4) сохраните проект или экспортируйте готовый комикс. Раскадровка — это пока только текст, серые блоки означают, что рисунков нет. Если генерация не настроена, приложение покажет это и не создаст фиктивные иллюстрации.</p><p class="comic-note">Генерация на телефоне и внешние сервисы пока находятся в расширенных настройках. Модель MNN размером около 1,15 ГБ не скачивается без отдельного подтверждения.</p>
 <label for="comicStory">Идея или сюжет</label><textarea id="comicStory" rows="4" placeholder="Опишите героев, место действия и события"></textarea>
 <label for="comicCharacterName">Имя нового персонажа</label><input id="comicCharacterName" maxlength="80" placeholder="Например, Лея"><label for="comicCharacterLook">Уникальная внешность и отличительные детали</label><textarea id="comicCharacterLook" rows="2" placeholder="Возраст, лицо, волосы, одежда, телосложение, аксессуары, характерные детали"></textarea><button id="comicAddCharacter" type="button">Добавить персонажа</button><label for="comicCharacters">Карточки персонажей — сохраняйте постоянную внешность между кадрами</label><textarea id="comicCharacters" rows="4" placeholder="Добавьте одного или нескольких персонажей выше. Можно также редактировать карточки вручную."></textarea>
 <div class="comic-row"><div><label for="comicMood">Атмосфера</label><select id="comicMood"><option>Приключение и динамика</option><option>Тёплая и уютная</option><option>Мрачная и напряжённая</option><option>Эпическая и масштабная</option><option>Юмор и лёгкость</option><option>Меланхоличная</option></select></div><div><label for="comicComposition">Композиция кадра</label><select id="comicComposition"><option>Автоматически по сцене</option><option>Кинематографический широкий план</option><option>Портрет и эмоции</option><option>Динамичный ракурс и движение</option><option>Общий план окружения</option></select></div></div>
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>
 <div><label for="comicStyle">Визуальный стиль</label><select id="comicStyle"><option selected>Кинематографический реализм</option><option>Комикс с чёткими контурами</option><option>Графический роман</option><option>Манга</option><option>Аниме</option><option>Акварельное фэнтези</option><option>Карандашный скетч</option><option>Ретро-комикс</option><option>Пиксель-арт</option><option>3D-анимация</option><option>Научная фантастика</option><option>Нуар</option><option>Поп-арт</option><option>Европейский альбомный комикс</option></select></div></div>
-<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки ИИ-сценариста (необязательно)</summary>
+<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Дополнительно: ИИ-сценарист</summary>
 <p class="comic-note">OpenAI-compatible Chat Completions (например, локальный Ollama /v1/chat/completions). Ответ модели должен содержать JSON-массив с полями title, scene, dialogue. Для локального сервера ключ обычно не нужен.</p>
 <label for="comicEndpoint">Chat-completions endpoint</label><input id="comicEndpoint" type="url" placeholder="https://example.com/v1/chat/completions">
 <label for="comicModel">Модель текста</label><input id="comicModel" placeholder="text-model">
 <label for="comicKey">Ключ текстового API</label><input id="comicKey" type="password" autocomplete="off">
 </details>
-<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Настройки генерации изображений</summary>
+<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Дополнительно: внешний генератор изображений</summary>
 <p class="comic-note">Есть два режима: OpenAI-compatible Images API и Pollinations. Pollinations требует API-ключ с сайта провайдера; доступность и стоимость зависят от вашей квоты и выбранной модели. Не публикуйте секретный ключ.</p><button id="comicUsePollinations" type="button">Настроить Pollinations</button><p class="comic-note">Обычный Images API: POST с model, prompt, size, n; ответ data[0].url или data[0].b64_json. Кнопка Pollinations переключает генератор на прямой image endpoint.</p>
 <label for="comicImageEndpoint">Images endpoint</label><input id="comicImageEndpoint" type="url" placeholder="https://example.com/v1/images/generations">
 <label for="comicImageModel">Модель изображений</label><input id="comicImageModel" placeholder="image-model">
 <label for="comicImageKey">Ключ API изображений</label><input id="comicImageKey" type="password" autocomplete="off">
 </details>
-<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Локальная генерация на телефоне (MNN) и через ComfyUI</summary>
+<details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Дополнительно: генерация на телефоне / ComfyUI</summary>
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>

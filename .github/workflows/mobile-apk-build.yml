@@ -79,6 +79,57 @@ jobs:
             if [[ -f "$config" ]]; then echo "### $config"; sed -n '1,200p' "$config"; fi
           done
 
+      - name: Patch Comic Studio module
+        run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
+        
+      - name: Validate JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$PROJECT_DIR/app/src/main/assets/index.html" <<'PY'
+          import html.parser, pathlib, subprocess, sys, tempfile
+          source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          class Parser(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.active=False; self.external=False; self.parts=[]; self.scripts=[]
+              def handle_starttag(self, tag, attrs):
+                  if tag.lower()=="script":
+                      self.active=True; self.external=any(k.lower()=="src" for k,_ in attrs); self.parts=[]
+              def handle_data(self, data):
+                  if self.active and not self.external: self.parts.append(data)
+              def handle_endtag(self, tag):
+                  if tag.lower()=="script" and self.active:
+                      if not self.external and "".join(self.parts).strip(): self.scripts.append("".join(self.parts))
+                      self.active=False
+          p=Parser(); p.feed(source)
+          if not p.scripts: raise SystemExit("No inline JavaScript found")
+          with tempfile.TemporaryDirectory() as d:
+              for i, script in enumerate(p.scripts):
+                  file=pathlib.Path(d)/f"inline-{i}.js"; file.write_text(script,encoding="utf-8")
+                  subprocess.run(["node","--check",str(file)],check=True)
+          print(f"PASS: syntax checked {len(p.scripts)} inline JavaScript block(s)")
+          PY
+
+      - name: Test Android editor interactions
+        run: node scripts/test-webapp.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
+
+      - name: Test Comic Studio flows with mocked APIs
+        run: node scripts/test-comic-studio.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install required Android platform packages
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
       - name: Fetch verified MNN Diffusion runtime artifact
         shell: bash
         env:
@@ -132,56 +183,6 @@ jobs:
           file "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/"*.so
           echo "MNN runtime run: $MNN_RUNTIME_SOURCE_RUN; artifact: $MNN_RUNTIME_ARTIFACT_ID"
 
-      - name: Patch Comic Studio module
-        run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
-        
-      - name: Validate JavaScript syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - "$PROJECT_DIR/app/src/main/assets/index.html" <<'PY'
-          import html.parser, pathlib, subprocess, sys, tempfile
-          source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
-          class Parser(html.parser.HTMLParser):
-              def __init__(self):
-                  super().__init__(); self.active=False; self.external=False; self.parts=[]; self.scripts=[]
-              def handle_starttag(self, tag, attrs):
-                  if tag.lower()=="script":
-                      self.active=True; self.external=any(k.lower()=="src" for k,_ in attrs); self.parts=[]
-              def handle_data(self, data):
-                  if self.active and not self.external: self.parts.append(data)
-              def handle_endtag(self, tag):
-                  if tag.lower()=="script" and self.active:
-                      if not self.external and "".join(self.parts).strip(): self.scripts.append("".join(self.parts))
-                      self.active=False
-          p=Parser(); p.feed(source)
-          if not p.scripts: raise SystemExit("No inline JavaScript found")
-          with tempfile.TemporaryDirectory() as d:
-              for i, script in enumerate(p.scripts):
-                  file=pathlib.Path(d)/f"inline-{i}.js"; file.write_text(script,encoding="utf-8")
-                  subprocess.run(["node","--check",str(file)],check=True)
-          print(f"PASS: syntax checked {len(p.scripts)} inline JavaScript block(s)")
-          PY
-
-      - name: Test Android editor interactions
-        run: node scripts/test-webapp.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
-
-      - name: Test Comic Studio flows with mocked APIs
-        run: node scripts/test-comic-studio.cjs "$PROJECT_DIR/app/src/main/assets/index.html"
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-
-      - name: Install required Android platform packages
-        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

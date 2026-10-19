@@ -68,6 +68,20 @@ module = r"""
    return await Promise.race([fetch(url,opts),timeout]);
   }finally{clearTimeout(timer);}
  }
+ async function responseError(res,provider,frame){
+  let detail="";
+  try{
+   const raw=await res.text();
+   if(raw){
+    try{
+     const body=JSON.parse(raw);
+     detail=body&&body.error?(typeof body.error==="string"?body.error:(body.error.message||JSON.stringify(body.error))):(body&&body.message)||raw;
+    }catch(_){detail=raw;}
+    detail=String(detail).replace(/\\s+/g," ").trim().slice(0,320);
+   }
+  }catch(_){}
+  return Error(provider+" вернул HTTP "+res.status+" на кадре "+frame+(detail?": "+detail:""));
+ }
 
  function render(items){
   panels=items.map((p,i)=>({title:String(p.title||("Кадр "+(i+1)),),scene:String(p.scene||p.description||""),dialogue:String(p.dialogue||""),imageUrl:p.imageUrl||""}));
@@ -157,7 +171,7 @@ module = r"""
    if(endpoint){
     if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
     const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев, причинно-следственную связь, разнообразие планов и эмоций. Учитывай паспорт персонажей и атмосферу."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Атмосфера: "+mood+". Композиция: "+composition+". Паспорт персонажей: "+(characters||"создай подходящих сюжету героев и сохраняй их внешний вид")+". Сюжет: "+story}]})});
-    if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
+    if(!res.ok)throw await responseError(res,"Текстовый API","—");
     const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
     if(!raw)throw Error("В ответе текстового API нет сценария.");
     const parsed=JSON.parse(String(raw).replace(/^\x60\x60\x60(?:json)?\s*/i,"").replace(/\s*\x60\x60\x60$/,""));
@@ -184,7 +198,7 @@ module = r"""
      if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
       const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
       const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}},120000);
-      if(!res.ok)throw Error("Pollinations вернул HTTP "+res.status+" на кадре "+(i+1));
+      if(!res.ok)throw await responseError(res,"Pollinations",i+1);
       const blob=await res.blob();
       if(!blob.type||!blob.type.toLowerCase().startsWith("image/")||!blob.size)throw Error("Pollinations не вернул непустое изображение для кадра "+(i+1)+" (Content-Type: "+(blob.type||"не указан")+"). Проверьте ключ, квоту и ответ провайдера.");
       const bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
@@ -192,7 +206,7 @@ module = r"""
       imageUrl="data:"+blob.type+";base64,"+btoa(binary);
      }else{
       const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})},120000);
-      if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
+      if(!res.ok)throw await responseError(res,"Images API",i+1);
       const data=await res.json(),item=data.data&&data.data[0];
       if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
       imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");

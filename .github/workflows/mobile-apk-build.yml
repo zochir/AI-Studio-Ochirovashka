@@ -7,7 +7,7 @@ on:
       - "*.zip"
       - "scripts/**"
       - "android-overlay/**"
-      - ".github/workflows/mobile-apk-build.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read

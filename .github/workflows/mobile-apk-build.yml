@@ -164,6 +164,29 @@ jobs:
           path: mnn-source
           fetch-depth: 1
 
+      - name: Export compatible Stable Diffusion tokenizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/mnn-tokenizer-venv
+          /tmp/mnn-tokenizer-venv/bin/pip install --disable-pip-version-check "transformers==4.46.3" sentencepiece
+          mkdir -p /tmp/sd15-tokenizer-source /tmp/sd15-tokenizer-output
+          for file in config.json tokenizer.json tokenizer_config.json special_tokens_map.json vocab.json merges.txt; do
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://huggingface.co/openai/clip-vit-large-patch14/resolve/main/$file" \
+              -o "/tmp/sd15-tokenizer-source/$file"
+          done
+          PYTHONPATH="$GITHUB_WORKSPACE/mnn-source/transformers/diffusion/export" \
+            /tmp/mnn-tokenizer-venv/bin/python - <<'PY'
+          from convert_mnn import export_diffusion_mtok
+          export_diffusion_mtok("/tmp/sd15-tokenizer-source", "/tmp/sd15-tokenizer-output")
+          PY
+          test -s /tmp/sd15-tokenizer-output/tokenizer.mtok || { echo "MNN tokenizer export did not produce tokenizer.mtok"; exit 1; }
+          mkdir -p "$PROJECT_DIR/app/src/main/assets"
+          cp /tmp/sd15-tokenizer-output/tokenizer.mtok "$PROJECT_DIR/app/src/main/assets/tokenizer.mtok"
+          sha256sum "$PROJECT_DIR/app/src/main/assets/tokenizer.mtok"
+          echo "Exported official CLIP tokenizer to MNN .mtok format."
+
       - name: Compile Android JNI bridge and package MNN runtime
         shell: bash
         run: |

@@ -1,9 +1,9 @@
 #include <jni.h>
 #include <string>
+#include <exception>
 #include <diffusion/diffusion.hpp>
 
 using MNN::DIFFUSION::Diffusion;
-using MNN::DIFFUSION::DiffusionModelType;
 using MNN::DIFFUSION::STABLE_DIFFUSION_1_5;
 
 static std::string fromJava(JNIEnv* env, jstring value) {
@@ -18,16 +18,25 @@ static std::string fromJava(JNIEnv* env, jstring value) {
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_ainewsstudio_app_AndroidDiffusionBridge_nativeCreate(
     JNIEnv* env, jobject, jstring modelPath) {
-    const std::string path = fromJava(env, modelPath);
-    if (path.empty()) return 0;
-    Diffusion* diffusion = Diffusion::createDiffusion(
-        path, STABLE_DIFFUSION_1_5, MNN_FORWARD_OPENCL, 0);
-    if (!diffusion) return 0;
-    if (!diffusion->load()) {
+    Diffusion* diffusion = nullptr;
+    try {
+        const std::string path = fromJava(env, modelPath);
+        if (path.empty()) return 0;
+        diffusion = Diffusion::createDiffusion(
+            path, STABLE_DIFFUSION_1_5, MNN_FORWARD_OPENCL, 0);
+        if (!diffusion) return 0;
+        if (!diffusion->load()) {
+            delete diffusion;
+            return 0;
+        }
+        return reinterpret_cast<jlong>(diffusion);
+    } catch (const std::exception&) {
+        delete diffusion;
+        return 0;
+    } catch (...) {
         delete diffusion;
         return 0;
     }
-    return reinterpret_cast<jlong>(diffusion);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -36,10 +45,16 @@ Java_com_ainewsstudio_app_AndroidDiffusionBridge_nativeGenerate(
     jstring outputPath, jint steps, jint seed) {
     auto* diffusion = reinterpret_cast<Diffusion*>(handle);
     if (!diffusion) return JNI_FALSE;
-    const std::string promptText = fromJava(env, prompt);
-    const std::string output = fromJava(env, outputPath);
-    if (promptText.empty() || output.empty()) return JNI_FALSE;
-    return diffusion->run(promptText, output, steps, seed, {}) ? JNI_TRUE : JNI_FALSE;
+    try {
+        const std::string promptText = fromJava(env, prompt);
+        const std::string output = fromJava(env, outputPath);
+        if (promptText.empty() || output.empty() || steps <= 0) return JNI_FALSE;
+        return diffusion->run(promptText, output, steps, seed, {}) ? JNI_TRUE : JNI_FALSE;
+    } catch (const std::exception&) {
+        return JNI_FALSE;
+    } catch (...) {
+        return JNI_FALSE;
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

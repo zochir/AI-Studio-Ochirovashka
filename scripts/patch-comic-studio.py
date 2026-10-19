@@ -44,7 +44,7 @@ module = r"""
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>
-<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
+<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicCheckNative" type="button">Проверить локальный движок Android</button><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
@@ -480,6 +480,7 @@ module = r"""
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
+ $("comicCheckNative").addEventListener("click",()=>{if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=window.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
  $("comicBuildWorkflow").addEventListener("click",buildBasicComfyWorkflow);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));
  $("comicExport").addEventListener("click",()=>exportSvg("svg"));
@@ -503,4 +504,19 @@ else:
         raise SystemExit("Could not find body end tag")
     html = re.sub(r"</body\s*>", lambda m: module + "\n" + m.group(0), html, count=1, flags=re.I)
 p.write_text(html, encoding="utf-8")
-print("Comic Studio updated: storyboard, optional text/image APIs, portable JSON project import/export, SVG export.")
+
+# Add the native bridge only to the extracted Android host, never to the HTML preview.
+activity = Path(sys.argv[1]) / "app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
+if activity.is_file():
+    source = activity.read_text(encoding="utf-8")
+    host_hook = 'webView.addJavascriptInterface(AndroidTtsBridge(), "AndroidTTS")'
+    bridge_hook = 'webView.addJavascriptInterface(AndroidDiffusionBridge(this, webView), "AndroidDiffusion")'
+    if bridge_hook not in source:
+        if host_hook not in source:
+            raise SystemExit("Could not locate AndroidTTS JavaScript interface hook")
+        source = source.replace(host_hook, host_hook + "\\n        " + bridge_hook, 1)
+        activity.write_text(source, encoding="utf-8")
+else:
+    raise SystemExit("MainActivity.kt not found; native diffusion bridge cannot be exposed to WebView")
+
+print("Comic Studio updated: storyboard, optional text/image APIs, native MNN status bridge, portable project import/export and SVG/PNG export.")

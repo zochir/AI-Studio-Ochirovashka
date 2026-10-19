@@ -130,6 +130,11 @@ jobs:
       - name: Install required Android platform packages
         run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
       - name: Fetch verified MNN Diffusion runtime artifact
         shell: bash
         env:
@@ -183,11 +188,6 @@ jobs:
           file "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/"*.so
           echo "MNN runtime run: $MNN_RUNTIME_SOURCE_RUN; artifact: $MNN_RUNTIME_ARTIFACT_ID"
 
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
 
       - name: Probe official MNN Android runtime for diffusion symbols
         shell: bash

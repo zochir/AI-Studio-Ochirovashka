@@ -188,6 +188,27 @@ jobs:
           cat "$PROJECT_DIR/app/src/main/assets/tokenizer.sha256"
           echo "Exported official CLIP tokenizer to MNN .mtok format and wrote its SHA-256 manifest."
 
+      - name: Validate pinned SD1.5 model manifest without downloading weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=/tmp/sd15-manifest.json
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://huggingface.co/api/models/taobao-mnn/stable-diffusion-v1-5-mnn-opencl/tree/0dc4a5dbcee59a83bbc9694d13b10b4a7de4adc2?recursive=true&expand=true" \
+            -o "$manifest"
+          total=0
+          for file in alphas.txt text_encoder.mnn text_encoder.mnn.weight unet.mnn unet.mnn.weight vae_decoder.mnn vae_decoder.mnn.weight; do
+            item="$(jq -c --arg file "$file" '[.[] | select(.path==$file)][0] // empty' "$manifest")"
+            test -n "$item" || { echo "Pinned model manifest is missing $file"; exit 1; }
+            oid="$(jq -r 'if .lfs.oid then .lfs.oid else .oid end' <<<"$item")"
+            size="$(jq -r 'if .lfs.size then .lfs.size else .size end' <<<"$item")"
+            test -n "$oid" && test "$oid" != "null" && test "$size" -gt 0
+            total=$((total + size))
+            echo "$file: $size bytes; integrity identifier present"
+          done
+          test "$total" -gt 1000000000 || { echo "Model size is unexpectedly small: $total"; exit 1; }
+          echo "Pinned model manifest validated; total bytes: $total. No model weights downloaded in CI."
+
       - name: Compile Android JNI bridge and package MNN runtime
         shell: bash
         run: |

@@ -25,7 +25,7 @@ class Element {
 }
 const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
-  'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicExportPng', 'comicStatus', 'comicPanels'];
+  'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicExportPng', 'comicExportHtml', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicCharacters.value = 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.';
@@ -254,5 +254,13 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(portableJson, /data:image\/png;base64,CQgHBg==/, 'portable project export should embed accessible ComfyUI images');
   assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/, 'export should not mutate the live project image URL');
   assert.match(els.comicStatus.textContent, /Все доступные изображения перенесены внутрь файла/);
-  console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export with embedded local images');
+  await els.comicExportHtml.click();
+  const htmlComic = await blobs.at(-1).text();
+  assert.equal(anchors.at(-1).download, 'comic-reader.html');
+  assert.match(htmlComic, /data:image\/png;base64,CQgHBg==/, 'standalone HTML comic should embed accessible local images');
+  assert.match(htmlComic, /Local generated image/);
+  assert.match(htmlComic, /@media print/, 'HTML comic should provide print-to-PDF styles');
+  assert.match(htmlComic, /<blockquote>/);
+  assert.match(els.comicStatus.textContent, /Автономный HTML-комикс экспортирован/);
+  console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON/HTML export with embedded local images and print styles');
 })().catch(error => { console.error(error); process.exit(1); });

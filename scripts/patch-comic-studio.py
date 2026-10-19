@@ -247,7 +247,7 @@ module = r"""
        if(typeof item.b64_json!=="string"||!item.b64_json.length||!/^[A-Za-z0-9+/]+={0,2}$/.test(item.b64_json))throw Error("Images API вернул некорректные base64-данные для кадра "+(i+1)+".");
        imageUrl="data:image/png;base64,"+item.b64_json;
       }else if(item.url){
-       if(typeof item.url!=="string"||!(/^(https?:\\/\\/|data:image\\/)/i).test(item.url))throw Error("Images API вернул неподдерживаемый адрес изображения для кадра "+(i+1)+". Ожидается HTTP(S)-URL или data:image.");
+       if(typeof item.url!=="string"||!(item.url.toLowerCase().startsWith("http://")||item.url.toLowerCase().startsWith("https://")||item.url.toLowerCase().startsWith("data:image/")))throw Error("Images API вернул неподдерживаемый адрес изображения для кадра "+(i+1)+". Ожидается HTTP(S)-URL или data:image.");
        imageUrl=item.url;
       }else{
        throw Error("Images API не вернул ни url, ни b64_json для кадра "+(i+1)+".");

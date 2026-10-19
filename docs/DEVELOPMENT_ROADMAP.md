@@ -147,3 +147,11 @@ GitHub Actions run `39304030368` завершился успешно, APK соб
 ### Проверка содержимого готового APK
 
 Артефакт `12215542312` скачан и проверен после упаковки: ZIP-контрольная сумма совпала с вложенным `SHA256SUMS.txt`. Внутри APK обнаружены `lib/arm64-v8a/libMNN.so`, `lib/arm64-v8a/libcomicdiffusion.so`, `assets/tokenizer.mtok` и `assets/tokenizer.sha256`. SHA-256 самого APK: `c16cbb0fca6b8d4dfe2645d6c34d28e52f588c7c528bbed87c23dfa26d6773b9`; SHA-256 tokenizer asset совпал с manifest: `9167267c14bbb6cfc42bfb92dfd5820ab376630b8dece081c5a78e1ecec15628`. Это подтверждает корректную упаковку нативного runtime и tokenizer, но не запуск модели и не успешную генерацию изображения.
+
+
+### Контрольные суммы скачивания модели проверены
+
+- Исправлена обработка метаданных Hugging Face: для LFS используется `lfs.oid` (SHA-256 содержимого), а для обычных Git-файлов — Git blob SHA-1. Xet storage hash не используется как контрольная сумма содержимого.
+- CI успешно скачал и проверил два небольших образца без загрузки больших весов: `alphas.txt` по Git blob SHA-1 и `text_encoder.mnn` по LFS SHA-256. Закреплённый manifest и алгоритмы проверки прошли run `39311374681`.
+- Финальная на данный момент сборка: artifact ID `12217050044`, run https://github.com/zochir/AI-Studio-Ochirovashka/actions/runs/39311374681. ZIP SHA-256 совпал с вложенным `SHA256SUMS.txt`; SHA-256 APK: `4c2a7f5fd7cacb6f853a3d5779236d0ba105e2f5e2497a649c4915f99fec78e4`. Проверено наличие MNN runtime, JNI bridge и tokenizer assets в APK.
+- Остаётся последний обязательный этап: загрузить все веса в приложении и выполнить реальную генерацию на целевом физическом устройстве. CI не скачивает 1,15 GB модель и не выдаёт успешную сборку за успешный inference.

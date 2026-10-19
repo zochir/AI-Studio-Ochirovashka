@@ -224,9 +224,10 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   // ComfyUI retries must use the local provider and only requeue failed local frames.
   els.comicLocalEndpoint.value = 'http://comfy.test:8188';
   els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
+  const beforeLocalQueue = localPromptRequests;
   localFailNextPrompt = true;
   await els.comicGenerateLocal.click();
-  assert.equal(localPromptRequests, 2, 'local queue should attempt both frames even if the first fails');
+  assert.equal(localPromptRequests, beforeLocalQueue + 2, 'local queue should attempt both frames even if the first fails');
   assert.match(els.comicStatus.textContent, /завершена частично/);
   assert.equal(els.comicRetryImages.disabled, false, 'local failure should enable retry');
   const beforeLocalRetry = localPromptRequests;

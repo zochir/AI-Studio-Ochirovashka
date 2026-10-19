@@ -62,8 +62,9 @@ const context = {
     if (url === 'https://images.test/fail-first') {
       failingImageRequests++;
       if (failingImageRequests === 1) return { ok: false, status: 503, text: async () => JSON.stringify({ error: { message: 'temporary provider overload' } }) };
-      assert.match(request.prompt, /Second scene/);
-      return { ok: true, json: async () => ({ data: [{ b64_json: 'c2Vjb25k' }] }) };
+      if (failingImageRequests === 2) assert.match(request.prompt, /Second scene/);
+      if (failingImageRequests === 3) assert.match(request.prompt, /First scene/);
+      return { ok: true, json: async () => ({ data: [{ b64_json: failingImageRequests === 3 ? 'Zmlyc3Q=' : 'c2Vjb25k' }] }) };
     }
     if (url.startsWith('https://gen.pollinations.ai/image/')) {
       assert.equal(options.method, 'GET');

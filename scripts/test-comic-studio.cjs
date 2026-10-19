@@ -233,6 +233,9 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /Сценарий создан ИИ/);
   els.comicImageKey.value = '';
+  // Keep this assertion on the external API path; the local-first path is tested below.
+  els.comicLocalEndpoint.value = '';
+  els.comicWorkflow.value = '';
   els.comicGenerateImages.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /создано 1 изображений/);

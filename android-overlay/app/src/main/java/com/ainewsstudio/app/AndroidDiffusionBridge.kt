@@ -54,6 +54,14 @@ class AndroidDiffusionBridge(
                 if (absent.isNotEmpty()) throw IllegalStateException("Manifest без файлов: " + absent.joinToString(", "))
                 val total = MODEL_FILES.sumOf { manifest.getValue(it).size }
                 if (total < 1_000_000_000L) throw IllegalStateException("Размер модели меньше ожидаемого; скачивание остановлено.")
+                // StatFs requires an existing path on Android. Create the private model directory
+                // before querying free space so a first-time install does not fail with ENOENT.
+                if (!modelDir.exists() && !modelDir.mkdirs()) {
+                    throw IllegalStateException("Не удалось создать каталог модели в хранилище приложения.")
+                }
+                if (!modelDir.isDirectory) {
+                    throw IllegalStateException("Путь для локальной модели не является каталогом.")
+                }
                 if (StatFs(modelDir.absolutePath).availableBytes < total + 150_000_000L) {
                     throw IllegalStateException("Недостаточно свободного места: требуется около " +
                         String.format(java.util.Locale.US, "%.2f GB", (total + 150_000_000L) / 1_000_000_000.0))

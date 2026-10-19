@@ -43,7 +43,7 @@ module = r"""
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Локальная генерация через ComfyUI (основной режим)</summary>
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
-<label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"class_type":"...","inputs":{"text":"__PROMPT__"}}}'></textarea>
+<label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>
 <button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
@@ -56,6 +56,7 @@ module = r"""
  const $=id=>document.getElementById(id);
  let panels=[];
  let failedImageFrames=new Set();
+ let characterReferenceDataUrl="";
  const PROJECT_KEY="ai-studio-comic-project-v1";
  const names=["Завязка","Открытие","Развитие","Поворот","Кульминация","Развязка","Финал","Эпилог"];
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -94,7 +95,7 @@ module = r"""
  }
  function saveProject(){
   try{
-   const data={version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
+   const data={version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,characterReferenceDataUrl:characterReferenceDataUrl,panels:panels};
    localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
    $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
   }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
@@ -117,6 +118,7 @@ module = r"""
    $("comicImageModel").value=String(data.imageModel||"");
    $("comicLocalEndpoint").value=String(data.localEndpoint||"");
    $("comicWorkflow").value=String(data.workflow||"");
+   characterReferenceDataUrl=String(data.characterReferenceDataUrl||"");$("comicReferenceStatus").textContent=characterReferenceDataUrl?"Референс загружен из сохранённого проекта.":"Референс не выбран.";
    failedImageFrames.clear();$("comicRetryImages").disabled=true;
    render(data.panels);
    $("comicStatus").textContent="Проект загружен ("+panels.length+" кадров).";
@@ -127,7 +129,7 @@ module = r"""
   return Array.from({length:n},(_,i)=>({title:names[i]||("Сцена "+(i+1)),scene:chunks[Math.min(chunks.length-1,Math.floor(i*chunks.length/n))]}));
  }
  function projectData(){
-  return {format:"ai-comic-studio-project",version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels.map(p=>Object.assign({},p))};
+  return {format:"ai-comic-studio-project",version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,characterReferenceDataUrl:characterReferenceDataUrl,panels:panels.map(p=>Object.assign({},p))};
  }
  function downloadText(filename,text,mime){
   const url=URL.createObjectURL(new Blob([text],{type:mime})),a=document.createElement("a");
@@ -174,6 +176,7 @@ module = r"""
     $("comicEndpoint").value=String(data.endpoint||"");$("comicModel").value=String(data.model||"");
     $("comicImageEndpoint").value=String(data.imageEndpoint||"");$("comicImageModel").value=String(data.imageModel||"");
     $("comicLocalEndpoint").value=String(data.localEndpoint||"");$("comicWorkflow").value=String(data.workflow||"");
+    characterReferenceDataUrl=String(data.characterReferenceDataUrl||"");$("comicReferenceStatus").textContent=characterReferenceDataUrl?"Референс загружен из проекта.":"Референс не выбран.";
     failedImageFrames.clear();$("comicRetryImages").disabled=true;
     render(data.panels);saveProject();$("comicStatus").textContent="Проект импортирован: "+panels.length+" кадров. Секретные ключи API нужно ввести заново.";
    }catch(e){$("comicStatus").textContent="Не удалось импортировать проект: "+e.message;}
@@ -279,8 +282,14 @@ module = r"""
   try{template=JSON.parse(workflowText);}catch(e){$("comicStatus").textContent="Workflow JSON некорректен: "+e.message;return;}
   let placeholderCount=0;const countPlaceholders=v=>{if(typeof v==="string"){const m=v.match(/__PROMPT__/g);placeholderCount+=m?m.length:0;}else if(Array.isArray(v))v.forEach(countPlaceholders);else if(v&&typeof v==="object")Object.values(v).forEach(countPlaceholders);};countPlaceholders(template);
   if(!placeholderCount){$("comicStatus").textContent="Workflow не содержит __PROMPT__. Добавьте этот маркер в positive prompt API-workflow, иначе каждый кадр будет генерироваться по одному и тому же запросу.";return;}
+  let referenceMarker=false;const findReference=v=>{if(typeof v==="string"&&v.includes("__CHARACTER_REFERENCE__"))referenceMarker=true;else if(Array.isArray(v))v.forEach(findReference);else if(v&&typeof v==="object")Object.values(v).forEach(findReference);};findReference(template);
+  if(referenceMarker&&!characterReferenceDataUrl){$("comicStatus").textContent="Workflow содержит __CHARACTER_REFERENCE__, но файл референса не выбран.";return;}
   const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
   if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных локальных кадров для повтора.":"В проекте нет кадров.";return;}
+  let uploadedReference="";
+  if(referenceMarker){
+   try{const referenceBlob=await (await fetch(characterReferenceDataUrl)).blob();const form=new FormData();form.append("image",referenceBlob,"character-reference.png");form.append("overwrite","true");form.append("type","input");const upload=await fetchTimed(base+"/upload/image",{method:"POST",body:form});if(!upload.ok)throw Error("ComfyUI /upload/image HTTP "+upload.status);const result=await upload.json();if(!result.name)throw Error("ComfyUI не вернул имя загруженного референса.");uploadedReference=(result.subfolder?result.subfolder+"/":"")+result.name;}catch(e){$("comicStatus").textContent="Не удалось загрузить референс в ComfyUI: "+e.message;return;}
+  }
   $("comicGenerateLocal").disabled=true;$("comicRetryImages").disabled=true;
   let completed=0;const failures=[];
   try{
@@ -291,7 +300,7 @@ module = r"""
      const nextScene=i<panels.length-1?panels[i+1].scene:"Final shot; visually resolve the action.";
      const realismGuide=$("comicStyle").value==="Кинематографический реализм"?"Photorealistic live-action film still, believable anatomy and facial proportions, natural skin texture with pores and subtle imperfections, physically plausible hair and fabric, grounded materials and realistic weathering, motivated cinematic lighting, natural color grading, realistic depth of field, cinema-camera perspective with a 35mm or 50mm lens, no plastic skin, waxy faces, synthetic 3D look, painterly strokes or collage.":"Respect the selected art style while maintaining convincing anatomy, perspective, lighting, materials, expressions and detailed environments.";
      const prompt="Create one polished sequential-story comic panel depicting a specific moment in action, not a poster or collage. "+realismGuide+" No text, letters, subtitles, speech bubbles, watermark, logo, paint palette or easel. Style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible: preserve exact faces, ages, proportions, hairstyles, clothing, colors and distinguishing marks: "+($("comicCharacters").value.trim()||"derive coherent recurring designs and keep them unchanged")+". Continuity: previous scene: "+previousScene+". Next scene: "+nextScene+". Keep identities, costume details, props, geography, weather, lighting direction and time of day consistent unless the story explicitly changes them. Show readable physical action, believable body language, natural facial emotion, correct hands and anatomy, detailed foreground/midground/background, purposeful camera framing and no duplicated people or objects. Current scene: "+panels[i].scene+". Dialogue context (convey visually, do not render text): "+panels[i].dialogue+". Vary shot size and angle while preserving character identity. No captions or lettering.";
-     const panelSeed=stablePanelSeed(i);const replace=(v)=>typeof v==="string"?(v==="__SEED__"?panelSeed:v.replace(/__PROMPT__/g,prompt).replace(/__SEED__/g,String(panelSeed))):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
+     const panelSeed=stablePanelSeed(i);const replace=(v)=>typeof v==="string"?(v==="__SEED__"?panelSeed:v.replace(/__PROMPT__/g,prompt).replace(/__SEED__/g,String(panelSeed)).replace(/__CHARACTER_REFERENCE__/g,uploadedReference)):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
      const res=await fetchTimed(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
      if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
      const queued=await res.json(),id=queued.prompt_id;
@@ -419,6 +428,12 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Не удалось экспортировать комикс: "+e.message;}
   finally{$("comicExport").disabled=false;$("comicExportPng").disabled=false;}
  }
+ $("comicReferenceFile").addEventListener("change",()=>{
+  const file=$("comicReferenceFile").files&&$("comicReferenceFile").files[0];if(!file){characterReferenceDataUrl="";$("comicReferenceStatus").textContent="Референс не выбран.";return;}
+  if(!/^image\/(png|jpeg|webp)$/i.test(file.type)){$("comicReferenceStatus").textContent="Поддерживаются PNG, JPEG и WebP.";return;}
+  if(file.size>2*1024*1024){$("comicReferenceStatus").textContent="Файл больше 2 МБ. Уменьшите изображение и выберите снова.";return;}
+  const reader=new FileReader();reader.onload=()=>{characterReferenceDataUrl=String(reader.result||"");$("comicReferenceStatus").textContent="Референс загружен ("+Math.round(file.size/1024)+" КБ). Для использования нужен workflow с reference-conditioning.";};reader.onerror=()=>{$("comicReferenceStatus").textContent="Не удалось прочитать изображение.";};reader.readAsDataURL(file);
+ });
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",()=>generateImages(false));

@@ -34,24 +34,30 @@ jobs:
           response="$(curl --fail --silent --show-error "${headers[@]}" "${api}")"
           python3 -c '
           import json, sys
+          from datetime import datetime, timezone
           data = json.load(sys.stdin)
           runs = data.get("workflow_runs", [])
           if not runs:
               print("WARN: no mobile APK build runs found; watchdog will not dispatch or retry builds.")
               raise SystemExit(0)
           for run in runs:
-              print("run_id={id} status={status} conclusion={conclusion} event={event} created_at={created_at} url={url}".format(
+              print("run_id={id} status={status} conclusion={conclusion} event={event} created_at={created_at} updated_at={updated_at} url={url}".format(
                   id=run.get("id"), status=run.get("status"), conclusion=run.get("conclusion"),
-                  event=run.get("event"), created_at=run.get("created_at"), url=run.get("html_url")))
+                  event=run.get("event"), created_at=run.get("created_at"), updated_at=run.get("updated_at"),
+                  url=run.get("html_url")))
           latest = runs[0]
+          stamp = latest.get("run_started_at") or latest.get("created_at")
+          age = max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds())) if stamp else 0
           print("LATEST_RUN_ID=" + str(latest.get("id")))
           print("LATEST_STATUS=" + str(latest.get("status")))
           print("LATEST_CONCLUSION=" + str(latest.get("conclusion")))
+          print("LATEST_AGE_SECONDS=" + str(age))
           ' <<< "${response}" > /tmp/latest-build.txt
           cat /tmp/latest-build.txt
           run_id="$(sed -n 's/^LATEST_RUN_ID=//p' /tmp/latest-build.txt)"
           status="$(sed -n 's/^LATEST_STATUS=//p' /tmp/latest-build.txt)"
           conclusion="$(sed -n 's/^LATEST_CONCLUSION=//p' /tmp/latest-build.txt)"
+          age_seconds="$(sed -n 's/^LATEST_AGE_SECONDS=//p' /tmp/latest-build.txt)"
           if [[ "${status}" == "completed" && "${conclusion}" == "success" ]]; then
             artifacts_url="https://api.github.com/repos/${REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100"
             artifacts="$(curl --fail --silent --show-error "${headers[@]}" "${artifacts_url}")"
@@ -69,7 +75,13 @@ jobs:
               print("WARN: successful build has no available AI-Studio-Ochirovashka-APK artifact.")
           ' <<< "${artifacts}"
           elif [[ "${status}" == "queued" || "${status}" == "in_progress" ]]; then
-            echo "WARN: latest build is active; watchdog will not cancel or duplicate it."
+            if [[ "${status}" == "queued" && "${age_seconds}" -gt 900 ]]; then
+              echo "WARN: latest build has been queued for over 15 minutes; investigate runner capacity/queue. No duplicate build dispatched."
+            elif [[ "${status}" == "in_progress" && "${age_seconds}" -gt 1800 ]]; then
+              echo "WARN: latest build has run for over 30 minutes, beyond the 20-minute job timeout expectation; inspect job logs and runner state. No cancellation or duplicate build attempted."
+            else
+              echo "WARN: latest build is active; age_seconds=${age_seconds}; watchdog will not cancel or duplicate it."
+            fi
           else
             echo "WARN: latest build is not successful; inspect its logs before a targeted retry."
           fi

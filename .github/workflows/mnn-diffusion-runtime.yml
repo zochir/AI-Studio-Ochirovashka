@@ -26,15 +26,19 @@ jobs:
           path: mnn-src
           fetch-depth: 1
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install CMake and NDK
         shell: bash
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "cmake;3.22.1" "ndk;27.2.12479018"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "cmake;3.22.1" "ndk;27.2.12479018"
 
       - name: Configure MNN with diffusion enabled
         shell: bash

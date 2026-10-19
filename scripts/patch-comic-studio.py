@@ -48,7 +48,7 @@ module = r"""
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
-<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button>
+<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button><button id="comicExportPng" type="button">Экспорт PNG-страницы</button>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
 <script>
@@ -302,7 +302,7 @@ module = r"""
   return '<text x="'+x+'" y="'+y+'" '+(attributes||'')+'>'+lines.map((line,i)=>'<tspan x="'+x+'" dy="'+(i===0?0:lineHeight)+'">'+escSvg(line)+'</tspan>').join("")+'</text>';
  }
  function escSvg(value){return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
- async function exportSvg(){
+ async function exportSvg(format){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const imageData=async src=>{
@@ -319,7 +319,7 @@ module = r"""
     return "data:"+mime+";base64,"+btoa(binary);
    }catch(e){return "";}
   };
-  $("comicExport").disabled=true;
+  $("comicExport").disabled=true;$("comicExportPng").disabled=true;
   $("comicStatus").textContent="Подготовка экспорта: встраиваем доступные изображения…";
   try{
    const w=400,h=250,cols=2,rows=Math.ceil(panels.length/cols),images=await Promise.all(panels.map(p=>imageData(p.imageUrl)));
@@ -332,11 +332,32 @@ module = r"""
     return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+title+scene+dialogue+'</g>';
    }).join("");
    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(cols*w)+'" height="'+(rows*h)+'" viewBox="0 0 '+(cols*w)+' '+(rows*h)+'">'+body+'</svg>';
-   const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"})),a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"}));
+   if(format==="png"){
+    const rasterize=()=>new Promise((resolve,reject)=>{
+     const image=new Image();
+     image.onload=()=>{
+      try{
+       const canvas=document.createElement("canvas");canvas.width=cols*w;canvas.height=rows*h;
+       const ctx=canvas.getContext("2d");if(!ctx)throw Error("Canvas 2D недоступен");
+       ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+       canvas.toBlob(blob=>blob?resolve(blob):reject(Error("Браузер не смог сформировать PNG")),"image/png");
+      }catch(e){reject(e);}
+     };
+     image.onerror=()=>reject(Error("Не удалось преобразовать SVG в PNG"));
+     image.src=url;
+    });
+    try{
+     const png=await rasterize(),pngUrl=URL.createObjectURL(png),a=document.createElement("a");
+     a.href=pngUrl;a.download="comic-storyboard.png";a.click();setTimeout(()=>URL.revokeObjectURL(pngUrl),1000);
+    }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
+   }else{
+    const a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }
    const embedded=images.filter(Boolean).length;
-   $("comicStatus").textContent="Экспорт SVG подготовлен. Встроено изображений: "+embedded+" из "+panels.length+". Если локальный сервер блокирует CORS, соответствующий кадр экспортирован как заглушка.";
+   $("comicStatus").textContent="Экспорт "+(format==="png"?"PNG":"SVG")+" подготовлен. Встроено изображений: "+embedded+" из "+panels.length+". Если локальный сервер блокирует CORS, соответствующий кадр экспортирован как заглушка.";
   }catch(e){$("comicStatus").textContent="Не удалось экспортировать комикс: "+e.message;}
-  finally{$("comicExport").disabled=false;}
+  finally{$("comicExport").disabled=false;$("comicExportPng").disabled=false;}
  }
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
@@ -345,7 +366,8 @@ module = r"""
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);
- $("comicExport").addEventListener("click",exportSvg);
+ $("comicExport").addEventListener("click",()=>exportSvg("svg"));
+ $("comicExportPng").addEventListener("click",()=>exportSvg("png"));
  $("comicSave").addEventListener("click",saveProject);
  $("comicLoad").addEventListener("click",loadProject);
  $("comicExportProject").addEventListener("click",exportProject);

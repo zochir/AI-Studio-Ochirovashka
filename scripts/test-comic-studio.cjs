@@ -15,10 +15,12 @@ class Element {
   addEventListener(name, fn) { this.listeners[name] = fn; }
   click() { if (this.listeners.click) return this.listeners.click({ target: this }); this.clicked = true; }
   focus() { this.focused = true; }
+  getContext(kind) { if (kind !== '2d') return null; return { fillStyle: '', fillRect() {}, drawImage() {} }; }
+  toBlob(callback, type) { callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type })); }
 }
 const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
-  'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicStatus', 'comicPanels'];
+  'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicExportPng', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 els.comicCount.value = '4';
 els.comicCharacters.value = 'Лея: рыжие короткие волосы, зелёный плащ, родинка под левым глазом.';
@@ -35,11 +37,15 @@ const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
   createElement: tag => { const el = new Element(tag); anchors.push(el); return el; }
 };
+class FakeImage {
+  set src(value) { this._src = value; if (this.onload) this.onload(); }
+  get src() { return this._src; }
+}
 class FakeFileReader {
   readAsText(file) { this.result = file.content; if (this.onload) this.onload(); }
 }
 const context = {
-  document, console, Blob, FileReader: FakeFileReader,
+  document, console, Blob, Image: FakeImage, FileReader: FakeFileReader,
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
@@ -105,6 +111,11 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(exportedSvg, /<tspan/);
   assert.doesNotMatch(exportedSvg, /foreignObject/, 'export should not rely on HTML foreignObject rendering');
   assert.match(exportedSvg, /Иллюстрация не создана/);
+  await els.comicExportPng.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(anchors.at(-1).download, 'comic-storyboard.png');
+  assert.match(els.comicStatus.textContent, /Экспорт PNG подготовлен/);
+  assert.ok(blobs.some(blob => blob.type === 'image/png'), 'PNG export should create an image/png blob');
 
   els.comicEndpoint.value = 'https://api.test/v1/chat/completions';
   els.comicModel.value = 'test-model';

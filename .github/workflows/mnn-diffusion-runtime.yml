@@ -1,7 +1,10 @@
-name: Build MNN Diffusion Android runtime (manual)
+name: Build MNN Diffusion Android runtime
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/mnn-diffusion-runtime.yml'
 
 permissions:
   contents: read
@@ -50,7 +53,7 @@ jobs:
             -DMNN_IMGCODECS=ON \
             -DMNN_BUILD_TEST=OFF \
             -DMNN_BUILD_BENCHMARK=OFF \
-            -DMNN_BUILD_OPENCV=OFF \
+            -DMNN_BUILD_OPENCV=ON \
             -DMNN_BUILD_LLM_OMNI=OFF \
             -DMNN_SEP_BUILD=OFF \
             -DMNN_BUILD_FOR_ANDROID_COMMAND=ON \

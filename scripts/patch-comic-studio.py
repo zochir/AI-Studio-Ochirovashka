@@ -507,7 +507,8 @@ p.write_text(html, encoding="utf-8")
 
 # Add the native bridge only to the extracted Android host, never to the HTML preview.
 activity = Path(sys.argv[1]) / "app/src/main/java/com/ainewsstudio/app/MainActivity.kt"
-if activity.is_file():
+bridge_source = Path(sys.argv[1]) / "app/src/main/java/com/ainewsstudio/app/AndroidDiffusionBridge.kt"
+if activity.is_file() and bridge_source.is_file():
     source = activity.read_text(encoding="utf-8")
     host_hook = 'webView.addJavascriptInterface(AndroidTtsBridge(), "AndroidTTS")'
     bridge_hook = 'webView.addJavascriptInterface(AndroidDiffusionBridge(this, webView), "AndroidDiffusion")'

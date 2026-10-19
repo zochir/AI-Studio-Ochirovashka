@@ -70,6 +70,9 @@ const context = {
       assert.match(request.prompt, /AI scene/);
       assert.match(request.prompt, /Лея: рыжие короткие волосы/);
       assert.match(request.prompt, /Динамичный ракурс/);
+      assert.match(request.prompt, /immutable model-sheet canon/);
+      assert.match(request.prompt, /Seed for repeatable rerenders/);
+      assert.equal(Number.isInteger(request.seed), true, "image request should include a deterministic per-panel seed");
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
     }
     if (url === 'https://images.test/fail-first') {
@@ -84,6 +87,7 @@ const context = {
       assert.equal(options.headers.Authorization, 'Bearer pollinations-test-key');
       assert.match(decodeURIComponent(url), /AI scene/);
       assert.match(url, /model=flux/);
+      assert.match(url, /seed=\d+/);
       return { ok: true, blob: async () => new Blob([new Uint8Array([1,2,3,4])], {type:'image/jpeg'}) };
     }
     if (url === 'http://comfy.test:8188/system_stats') {

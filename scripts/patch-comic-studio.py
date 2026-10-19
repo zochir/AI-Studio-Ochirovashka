@@ -44,7 +44,7 @@ module = r"""
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>
-<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicCheckNative" type="button">Проверить локальный движок Android</button><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
+<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicCheckNative" type="button">Проверить локальный движок Android</button><button id="comicDownloadNativeModel" type="button">Скачать модель на телефон (≈1,15 ГБ)</button><button id="comicGenerateNative" type="button">Сгенерировать первый кадр на телефоне</button><p id="comicNativeModelProgress" class="comic-note" role="status">Локальная модель не скачивается автоматически. Для загрузки требуется свободное место и явное подтверждение.</p><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
@@ -55,9 +55,24 @@ module = r"""
 (function(){
  const $=id=>document.getElementById(id);
  let panels=[];
+ let nativeImageRequest=0;
+ let nativeModelRequest=0;
  let failedImageFrames=new Set();
  let characterReferenceDataUrl="";
  const PROJECT_KEY="ai-studio-comic-project-v1";
+ window.nativeComicImageResult=function(id,data,error){
+  if(Number(id)!==nativeImageRequest)return;
+  if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
+  if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
+ };
+ window.nativeComicModelProgress=function(id,percent,message,done){
+  if(Number(id)!==nativeModelRequest)return;
+  $("comicNativeModelProgress").textContent=(percent<0?"Ошибка загрузки: ":("Загрузка модели — "+percent+"%: "))+message;
+  $("comicDownloadNativeModel").disabled=!done;
+  if(done&&percent>=0)$("comicStatus").textContent="Локальная модель готова к проверке генерации.";
+ };
  const names=["Завязка","Открытие","Развитие","Поворот","Кульминация","Развязка","Финал","Эпилог"];
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  async function fetchTimed(url,options,timeoutMs=45000){
@@ -481,6 +496,29 @@ module = r"""
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicCheckNative").addEventListener("click",()=>{if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=window.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
+ $("comicDownloadNativeModel").addEventListener("click",()=>{
+  if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.downloadModel!=="function"){$("comicNativeModelProgress").textContent="Нативный движок отсутствует в этой сборке.";return;}
+  if(!confirm("Скачать на телефон модель Stable Diffusion размером около 1,15 ГБ? Нужен Wi-Fi или безлимитный интернет и дополнительное свободное место. Загрузка начнётся только после подтверждения."))return;
+  const id=++nativeModelRequest;$("comicDownloadNativeModel").disabled=true;$("comicNativeModelProgress").textContent="Подключение к репозиторию модели…";
+  window.AndroidDiffusion.downloadModel(String(id));
+ });
+ $("comicGenerateNative").addEventListener("click",()=>{
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  if(!window.AndroidDiffusion||typeof window.AndroidDiffusion.generate!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}
+  const state=window.AndroidDiffusion.status();
+  if(state!=="MODEL_PRESENT"){$("comicStatus").textContent="Сначала скачайте модель. Статус: "+state;return;}
+  const prompt=[panels[0].scene,$("comicCharacters").value,$("comicStyle").value,$("comicMood").value,"cinematic composition, detailed, coherent character appearance, no text, no watermark"].filter(Boolean).join(", ");
+  const id=++nativeImageRequest;$("comicGenerateNative").disabled=true;$("comicStatus").textContent="Генерация первого кадра на телефоне. Это может занять несколько минут.";
+  window.nativeComicImageResult=function(callbackId,data,error){
+   if(Number(callbackId)!==nativeImageRequest)return;
+   $("comicGenerateNative").disabled=false;
+   if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
+   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
+   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+   panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
+  };
+  window.AndroidDiffusion.generate(prompt,String(id));
+ });
  $("comicBuildWorkflow").addEventListener("click",buildBasicComfyWorkflow);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));
  $("comicExport").addEventListener("click",()=>exportSvg("svg"));
@@ -520,4 +558,13 @@ if activity.is_file() and bridge_source.is_file():
 else:
     print("Native MNN bridge source not present in this build; AndroidDiffusion UI will report unavailable.")
 
-print("Comic Studio updated: storyboard, optional text/image APIs, optional native MNN status bridge, portable project import/export and SVG/PNG export.")
+
+manifest = Path(sys.argv[1]) / "app/src/main/AndroidManifest.xml"
+if manifest.is_file():
+    source = manifest.read_text(encoding="utf-8")
+    permission = '<uses-permission android:name="android.permission.INTERNET" />'
+    if permission not in source:
+        source = re.sub(r'(<manifest\\b[^>]*>)', lambda m: m.group(1) + "\\n    " + permission, source, count=1)
+        manifest.write_text(source, encoding="utf-8")
+
+print("Comic Studio updated: storyboard, optional text/image APIs, native MNN model download, status and image generation bridge, portable project import/export and SVG/PNG export.")

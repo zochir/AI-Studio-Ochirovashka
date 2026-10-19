@@ -1,0 +1,53 @@
+name: Lightweight CI watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions schedules are best-effort; this is monitoring, not a hard SLA.
+    - cron: "*/15 * * * *"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ci-watchdog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inspect-latest-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Inspect latest APK build without starting another build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/mobile-apk-build.yml/runs?per_page=5"
+          response="$(curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api}")"
+          python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          runs = data.get("workflow_runs", [])
+          if not runs:
+              print("WARN: no mobile APK build runs found; watchdog will not dispatch or retry builds.")
+              raise SystemExit(0)
+          for run in runs:
+              print("run_id={id} status={status} conclusion={conclusion} event={event} created_at={created_at} url={url}".format(
+                  id=run.get("id"), status=run.get("status"), conclusion=run.get("conclusion"),
+                  event=run.get("event"), created_at=run.get("created_at"), url=run.get("html_url")))
+          latest = runs[0]
+          if latest.get("status") in ("queued", "in_progress"):
+              print("WARN: latest build is still active; watchdog will not cancel or duplicate it.")
+          elif latest.get("conclusion") != "success":
+              print("WARN: latest completed build is not successful; inspect its logs before a targeted retry.")
+          else:
+              print("PASS: latest APK build completed successfully.")
+          ' <<< "${response}"

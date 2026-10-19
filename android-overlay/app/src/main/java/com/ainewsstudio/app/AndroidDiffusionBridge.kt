@@ -83,7 +83,7 @@ class AndroidDiffusionBridge(
             val result = try {
                 if (!nativeAvailable) throw IllegalStateException("Нативная библиотека недоступна для ABI этого устройства.")
                 ensureBundledTokenizer()
-                val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
+                val required = MODEL_FILES + "tokenizer.mtok"
                 val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
                 if (missing.isNotEmpty()) {
                     "window.nativeComicImageResult(" + callbackId.toIntOrNull() + ",null," +

@@ -449,7 +449,15 @@ module = r"""
      for(const output of Object.values(history.outputs)){if(output&&Array.isArray(output.images)&&output.images.length){image=output.images[0];break;}}
      if(!image||!image.filename)throw Error("В результате workflow нет изображения. Проверьте SaveImage и выходы workflow.");
      const q=new URLSearchParams({filename:image.filename,subfolder:image.subfolder||"",type:image.type||"output"});
-     panels[i].imageUrl=base+"/view?"+q.toString();failedImageFrames.delete(i);completed++;render(panels);
+     const viewUrl=base+"/view?"+q.toString();
+     const imageResponse=await fetchTimed(viewUrl,{},30000);
+     if(!imageResponse.ok)throw Error("ComfyUI /view HTTP "+imageResponse.status+"; не удалось получить файл кадра.");
+     const imageBlob=await imageResponse.blob();
+     if(!imageBlob.type||!imageBlob.type.toLowerCase().startsWith("image/")||!imageBlob.size)throw Error("ComfyUI /view не вернул непустое изображение.");
+     if(imageBlob.size>20*1024*1024)throw Error("Изображение больше лимита 20 МБ.");
+     const imageBytes=new Uint8Array(await imageBlob.arrayBuffer());let imageBinary="";
+     for(let j=0;j<imageBytes.length;j+=0x8000)imageBinary+=String.fromCharCode(...imageBytes.subarray(j,j+0x8000));
+     panels[i].imageUrl="data:"+imageBlob.type+";base64,"+btoa(imageBinary);failedImageFrames.delete(i);completed++;render(panels);
     }catch(frameError){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю локальную очередь. Готово "+completed+" из "+panels.length+"…";}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;

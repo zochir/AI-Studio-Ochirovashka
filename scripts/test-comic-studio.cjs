@@ -118,7 +118,7 @@ const context = {
     if (url === 'http://comfy.test:8188/history/local-job-1') {
       return { ok: true, json: async () => ({ 'local-job-1': { outputs: { '9': { images: [{ filename: 'comic.png', subfolder: '', type: 'output' }] } } } }) };
     }
-    if (url === 'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output') {
+    if (url === 'http://comfy.test:8188/view?filename=portable.png&subfolder=&type=output' || url === 'http://comfy.test:8188/view?filename=comic.png&subfolder=&type=output') {
       return { ok: true, blob: async () => new Blob([new Uint8Array([9,8,7,6])], {type:'image/png'}) };
     }
     throw new Error('Unexpected network endpoint: ' + url);
@@ -156,6 +156,9 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicPanels.innerHTML, /AI panel/);
   assert.match(els.comicStatus.textContent, /Сценарий создан ИИ/);
+  // Test external image generation without the configured local ComfyUI endpoint.
+  els.comicLocalEndpoint.value = '';
+  els.comicWorkflow.value = '';
   els.comicImageEndpoint.value = 'https://images.test/v1/images/generations';
   els.comicImageModel.value = 'image-test-model';
   els.comicImageKey.value = 'image-test-key';
@@ -222,7 +225,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await new Promise(resolve => setTimeout(resolve, 0));
   console.log('LOCAL STATUS:', els.comicStatus.textContent);
   assert.match(JSON.stringify(localLastRequest), /character-reference\.png/);
-  assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/);
+  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,CQgHBg==/);
   assert.match(els.comicStatus.textContent, /ComfyUI завершил генерацию/);
   // Local OpenAI-compatible endpoints may not require API keys.
   els.comicKey.value = '';

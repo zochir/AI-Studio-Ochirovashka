@@ -190,11 +190,12 @@ module = r"""
   if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
   $("comicGenerateImages").disabled=true;
   try{
-   let completed=0;
+   let completed=0;const failures=[];
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
-    let imageUrl="";
+    try{
+     const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
+     let imageUrl="";
      if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
       const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
       const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}},120000);
@@ -213,8 +214,9 @@ module = r"""
      }
      if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
      panels[i].imageUrl=imageUrl;completed++;render(panels);
+    }catch(frameError){failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю очередь. Готово "+completed+" из "+panels.length+"…";}
    }
-   $("comicStatus").textContent="Готово: изображения получены для "+completed+" из "+panels.length+" кадров.";
+   $("comicStatus").textContent=failures.length?"Генерация завершена частично: готово "+completed+" из "+panels.length+". Ошибки: "+failures.join(" | ").slice(0,900)+". Уже готовые изображения сохранены; повторите генерацию для оставшихся кадров.":"Готово: изображения получены для "+completed+" из "+panels.length+" кадров.";
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }

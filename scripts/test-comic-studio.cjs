@@ -3,6 +3,8 @@ const vm = require('vm');
 const assert = require('assert/strict');
 
 const html = fs.readFileSync(process.argv[2], 'utf8');
+assert.match(html, /APK сам по себе не содержит готовую модель для рисования/, "the UI must disclose that real image generation requires a provider or model");
+assert.match(html, /Запросы к внешнему генератору начинаются только после нажатия/, "the UI must explain when external generation is triggered");
 const start = html.lastIndexOf('<script>');
 const end = html.indexOf('</script>', start);
 assert(start >= 0 && end > start, 'Comic Studio inline script must exist');

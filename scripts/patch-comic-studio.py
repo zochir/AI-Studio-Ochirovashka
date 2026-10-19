@@ -48,7 +48,7 @@ module = r"""
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button>
-<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExport" type="button">Экспорт SVG-страницы</button>
+<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
 <script>
@@ -105,6 +105,49 @@ module = r"""
  function localScenes(story,n){
   const sentences=story.replace(/\s+/g," ").split(/[.!?。！？]+/).map(x=>x.trim()).filter(Boolean),chunks=sentences.length?sentences:[story];
   return Array.from({length:n},(_,i)=>({title:names[i]||("Сцена "+(i+1)),scene:chunks[Math.min(chunks.length-1,Math.floor(i*chunks.length/n))]}));
+ }
+ function projectData(){
+  return {format:"ai-comic-studio-project",version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
+ }
+ function downloadText(filename,text,mime){
+  const url=URL.createObjectURL(new Blob([text],{type:mime})),a=document.createElement("a");
+  a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }
+ async function exportProject(){
+  $("comicExportProject").disabled=true;$("comicStatus").textContent="Подготовка переносимого проекта…";
+  try{
+   const data=projectData();
+   for(let i=0;i<data.panels.length;i++){
+    const src=data.panels[i].imageUrl;if(!src||/^data:image\//i.test(src))continue;
+    try{
+     const response=await fetchTimed(src,{},15000);if(!response.ok)throw Error("HTTP "+response.status);
+     const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+     for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
+     data.panels[i].imageUrl="data:"+(blob.type||"image/png")+";base64,"+btoa(binary);
+    }catch(e){data.panels[i].imageExportWarning="Изображение осталось внешней ссылкой: браузер не разрешил встроить файл (возможен CORS).";}
+   }
+   downloadText("comic-project.json",JSON.stringify(data,null,2),"application/json;charset=utf-8");
+   const embedded=data.panels.filter(x=>/^data:image\//i.test(x.imageUrl||"")).length,external=data.panels.filter(x=>x.imageUrl&&!/^data:image\//i.test(x.imageUrl)).length;
+   $("comicStatus").textContent="Проект JSON экспортирован. Встроенных изображений: "+embedded+"; внешних ссылок: "+external+". Ключи API не экспортируются.";
+  }catch(e){$("comicStatus").textContent="Не удалось экспортировать проект: "+e.message;}
+  finally{$("comicExportProject").disabled=false;}
+ }
+ function importProjectFile(file){
+  if(!file)return;const reader=new FileReader();
+  reader.onload=()=>{
+   try{
+    const data=JSON.parse(String(reader.result||""));
+    if(!data||data.format!=="ai-comic-studio-project"||data.version!==1||!Array.isArray(data.panels))throw Error("неподдерживаемый формат файла проекта");
+    $("comicStory").value=String(data.story||"");$("comicCharacters").value=String(data.characters||"");
+    $("comicMood").value=String(data.mood||"Приключение и динамика");$("comicComposition").value=String(data.composition||"Автоматически по сцене");
+    $("comicCount").value=String(data.count||4);$("comicStyle").value=String(data.style||"Комикс с чёткими контурами");
+    $("comicEndpoint").value=String(data.endpoint||"");$("comicModel").value=String(data.model||"");
+    $("comicImageEndpoint").value=String(data.imageEndpoint||"");$("comicImageModel").value=String(data.imageModel||"");
+    $("comicLocalEndpoint").value=String(data.localEndpoint||"");$("comicWorkflow").value=String(data.workflow||"");
+    render(data.panels);saveProject();$("comicStatus").textContent="Проект импортирован: "+panels.length+" кадров. Секретные ключи API нужно ввести заново.";
+   }catch(e){$("comicStatus").textContent="Не удалось импортировать проект: "+e.message;}
+  };
+  reader.onerror=()=>{$("comicStatus").textContent="Не удалось прочитать файл проекта."};reader.readAsText(file);
  }
  async function generateScript(){
   const story=$("comicStory").value.trim(),characters=$("comicCharacters").value.trim(),mood=$("comicMood").value,composition=$("comicComposition").value,n=Number($("comicCount").value),endpoint=$("comicEndpoint").value.trim(),model=$("comicModel").value.trim(),key=$("comicKey").value;
@@ -244,6 +287,9 @@ module = r"""
  $("comicExport").addEventListener("click",exportSvg);
  $("comicSave").addEventListener("click",saveProject);
  $("comicLoad").addEventListener("click",loadProject);
+ $("comicExportProject").addEventListener("click",exportProject);
+ $("comicImportProject").addEventListener("click",()=>$("comicProjectFile").click());
+ $("comicProjectFile").addEventListener("change",e=>{importProjectFile(e.target.files&&e.target.files[0]);e.target.value="";});
 })();
 </script>
 <!-- /AI_STUDIO_COMIC_MODULE_V1 -->
@@ -257,4 +303,4 @@ else:
         raise SystemExit("Could not find body end tag")
     html = re.sub(r"</body\s*>", lambda m: module + "\n" + m.group(0), html, count=1, flags=re.I)
 p.write_text(html, encoding="utf-8")
-print("Comic Studio updated: storyboard, optional text API, image API integration, SVG export.")
+print("Comic Studio updated: storyboard, optional text/image APIs, portable JSON project import/export, SVG export.")

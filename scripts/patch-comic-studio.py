@@ -178,7 +178,7 @@ module = r"""
  }
  function localScenes(story,n){
   const sentences=story.replace(/\s+/g," ").split(/[.!?。！？]+/).map(x=>x.trim()).filter(Boolean),chunks=sentences.length?sentences:[story];
-  const battlePattern=/сраж|битв|бой\b|войн|арм(ия|ии|ию|ией)|осад|напад|атаκ|атак|дуэл|меч|дракон|монстр|демон|враг|легион|battle|fight|warfare|army|siege|dragon|monster|demon|enemy/i;
+  const battlePattern=/сраж|битв|бой\b|войн|арм(ия|ии|ию|ией)|осад|напад|атак|дуэл|меч|дракон|монстр|демон|враг|легион|battle|fight|warfare|army|siege|dragon|monster|demon|enemy/i;
   const battle= battlePattern.test(story);
   const beats=[
    "Масштабный установочный план: две противоборствующие стороны сходятся на поле боя, видны рельеф, погода, знамёна и масштаб угрозы.",

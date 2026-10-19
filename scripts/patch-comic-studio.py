@@ -257,36 +257,43 @@ module = r"""
   if(!base||!workflowText){$("comicStatus").textContent="Укажите адрес ComfyUI и API workflow JSON.";return;}
   let template;
   try{template=JSON.parse(workflowText);}catch(e){$("comicStatus").textContent="Workflow JSON некорректен: "+e.message;return;}
-   let placeholderCount=0;const countPlaceholders=v=>{if(typeof v==="string"){const m=v.match(/__PROMPT__/g);placeholderCount+=m?m.length:0;}else if(Array.isArray(v))v.forEach(countPlaceholders);else if(v&&typeof v==="object")Object.values(v).forEach(countPlaceholders);};countPlaceholders(template);
-   if(!placeholderCount){$("comicStatus").textContent="Workflow не содержит __PROMPT__. Добавьте этот маркер в positive prompt API-workflow, иначе каждый кадр будет генерироваться по одному и тому же запросу.";return;}
+  let placeholderCount=0;const countPlaceholders=v=>{if(typeof v==="string"){const m=v.match(/__PROMPT__/g);placeholderCount+=m?m.length:0;}else if(Array.isArray(v))v.forEach(countPlaceholders);else if(v&&typeof v==="object")Object.values(v).forEach(countPlaceholders);};countPlaceholders(template);
+  if(!placeholderCount){$("comicStatus").textContent="Workflow не содержит __PROMPT__. Добавьте этот маркер в positive prompt API-workflow, иначе каждый кадр будет генерироваться по одному и тому же запросу.";return;}
   $("comicGenerateLocal").disabled=true;
+  let completed=0;const failures=[];
   try{
    for(let i=0;i<panels.length;i++){
     $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
-    const prompt="Create an actual narrative comic illustration, not an icon, logo, paint palette, easel, or placeholder. Depict the described scene. No text, letters, watermark, logo, paint palette, or easel. Comic panel "+(i+1)+" of "+panels.length+". Style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Scene: "+panels[i].scene+". Dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle according to scene while preserving character identity. No text or lettering.";
-    const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
-    const res=await fetchTimed(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
-    if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
-    const queued=await res.json(),id=queued.prompt_id;
-    if(!id)throw Error("ComfyUI не вернул prompt_id.");
-    let history=null;
-    for(let attempt=0;attempt<180;attempt++){
-     await new Promise(resolve=>setTimeout(resolve,1000));
-     const hr=await fetchTimed(base+"/history/"+encodeURIComponent(id),{},10000);
-     if(!hr.ok)continue;
-     const hd=await hr.json();history=hd[id]||hd[String(id)];
-     if(history&&history.outputs)break;
-     if(history&&history.status&&history.status.status_str==="error")throw Error("ComfyUI сообщил об ошибке генерации.");
-    }
-    if(!history||!history.outputs)throw Error("Истекло ожидание ComfyUI (3 минуты).");
-    let image=null;
-    for(const output of Object.values(history.outputs)){if(output&&Array.isArray(output.images)&&output.images.length){image=output.images[0];break;}}
-    if(!image||!image.filename)throw Error("В результате workflow нет изображения. Проверьте SaveImage и выходы workflow.");
-    const q=new URLSearchParams({filename:image.filename,subfolder:image.subfolder||"",type:image.type||"output"});
-    panels[i].imageUrl=base+"/view?"+q.toString();render(panels);
+    try{
+     const previousScene=i>0?panels[i-1].scene:"Opening shot; establish setting and character appearances.";
+     const nextScene=i<panels.length-1?panels[i+1].scene:"Final shot; visually resolve the action.";
+     const realismGuide=$("comicStyle").value==="Кинематографический реализм"?"Photorealistic live-action film still, believable anatomy and facial proportions, natural skin texture with pores and subtle imperfections, physically plausible hair and fabric, grounded materials and realistic weathering, motivated cinematic lighting, natural color grading, realistic depth of field, cinema-camera perspective with a 35mm or 50mm lens, no plastic skin, waxy faces, synthetic 3D look, painterly strokes or collage.":"Respect the selected art style while maintaining convincing anatomy, perspective, lighting, materials, expressions and detailed environments.";
+     const prompt="Create one polished sequential-story comic panel depicting a specific moment in action, not a poster or collage. "+realismGuide+" No text, letters, subtitles, speech bubbles, watermark, logo, paint palette or easel. Style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible: preserve exact faces, ages, proportions, hairstyles, clothing, colors and distinguishing marks: "+($("comicCharacters").value.trim()||"derive coherent recurring designs and keep them unchanged")+". Continuity: previous scene: "+previousScene+". Next scene: "+nextScene+". Keep identities, costume details, props, geography, weather, lighting direction and time of day consistent unless the story explicitly changes them. Show readable physical action, believable body language, natural facial emotion, correct hands and anatomy, detailed foreground/midground/background, purposeful camera framing and no duplicated people or objects. Current scene: "+panels[i].scene+". Dialogue context (convey visually, do not render text): "+panels[i].dialogue+". Vary shot size and angle while preserving character identity. No captions or lettering.";
+     const replace=(v)=>typeof v==="string"?v.replace(/__PROMPT__/g,prompt):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;
+     const res=await fetchTimed(base+"/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:replace(template)})});
+     if(!res.ok)throw Error("ComfyUI /prompt HTTP "+res.status+"; проверьте адрес, доступ и CORS.");
+     const queued=await res.json(),id=queued.prompt_id;
+     if(!id)throw Error("ComfyUI не вернул prompt_id.");
+     let history=null;
+     for(let attempt=0;attempt<180;attempt++){
+      await new Promise(resolve=>setTimeout(resolve,1000));
+      const hr=await fetchTimed(base+"/history/"+encodeURIComponent(id),{},10000);
+      if(!hr.ok)continue;
+      const hd=await hr.json();history=hd[id]||hd[String(id)];
+      if(history&&history.outputs)break;
+      if(history&&history.status&&history.status.status_str==="error")throw Error("ComfyUI сообщил об ошибке генерации.");
+     }
+     if(!history||!history.outputs)throw Error("Истекло ожидание ComfyUI (3 минуты).");
+     let image=null;
+     for(const output of Object.values(history.outputs)){if(output&&Array.isArray(output.images)&&output.images.length){image=output.images[0];break;}}
+     if(!image||!image.filename)throw Error("В результате workflow нет изображения. Проверьте SaveImage и выходы workflow.");
+     const q=new URLSearchParams({filename:image.filename,subfolder:image.subfolder||"",type:image.type||"output"});
+     panels[i].imageUrl=base+"/view?"+q.toString();failedImageFrames.delete(i);completed++;render(panels);
+    }catch(frameError){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю локальную очередь. Готово "+completed+" из "+panels.length+"…";}
    }
-   $("comicStatus").textContent="ComfyUI завершил генерацию всех "+panels.length+" кадров. Изображения доступны по адресу локального движка.";
-  }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен, workflow API-формата корректен и браузеру разрешён CORS.";}
+   $("comicRetryImages").disabled=failedImageFrames.size===0;
+   $("comicStatus").textContent=failures.length?"Локальная генерация завершена частично: готово "+completed+" из "+panels.length+". Ошибки: "+failures.join(" | ").slice(0,900)+". Уже созданные изображения сохранены; повторный запуск снова пройдёт по кадрам.":"ComfyUI завершил генерацию всех "+panels.length+" кадров.";
+  }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен и workflow API-формата корректен.";}
   finally{$("comicGenerateLocal").disabled=false;}
  }
  function wrapSvgLines(value,maxChars,maxLines){

@@ -283,7 +283,7 @@ module = r"""
   finally{$("comicGenerateLocal").disabled=false;}
  }
  function wrapSvgLines(value,maxChars,maxLines){
-  const words=String(value||"").replace(/\\s+/g," ").trim().split(" ").filter(Boolean),lines=[];let line="";
+  const words=String(value||"").replace(/\s+/g," ").trim().split(" ").filter(Boolean),lines=[];let line="";
   for(const word of words){
    const next=line?line+" "+word:word;
    if(next.length>maxChars&&line){lines.push(line);line=word;}else line=next;

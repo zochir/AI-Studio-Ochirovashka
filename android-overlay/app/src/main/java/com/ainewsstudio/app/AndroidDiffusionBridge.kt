@@ -23,6 +23,11 @@ class AndroidDiffusionBridge(
     @JavascriptInterface
     fun status(): String {
         if (!nativeAvailable) return "NATIVE_UNAVAILABLE"
+        try {
+            ensureBundledTokenizer()
+        } catch (e: Exception) {
+            return "TOKENIZER_UNAVAILABLE:" + (e.message ?: "tokenizer.mtok missing")
+        }
         val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
         val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
         return if (missing.isEmpty()) "MODEL_PRESENT" else "MODEL_MISSING:" + missing.joinToString(",")
@@ -33,6 +38,7 @@ class AndroidDiffusionBridge(
         executor.execute {
             val result = try {
                 if (!nativeAvailable) throw IllegalStateException("Нативная библиотека недоступна для ABI этого устройства.")
+                ensureBundledTokenizer()
                 val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
                 val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
                 if (missing.isNotEmpty()) {
@@ -61,6 +67,18 @@ class AndroidDiffusionBridge(
                     org.json.JSONObject.quote("Ошибка локальной генерации: " + (e.message ?: e.javaClass.simpleName)) + ");"
             }
             webView.post { webView.evaluateJavascript(result, null) }
+        }
+    }
+
+    private fun ensureBundledTokenizer() {
+        if (!modelDir.exists() && !modelDir.mkdirs()) {
+            throw IllegalStateException("Не удалось создать каталог модели в хранилище приложения.")
+        }
+        val target = File(modelDir, "tokenizer.mtok")
+        if (!target.isFile || target.length() == 0L) {
+            appContext.assets.open("tokenizer.mtok").use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
         }
     }
 

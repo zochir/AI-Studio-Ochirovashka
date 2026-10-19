@@ -56,6 +56,7 @@ class FakeFileReader {
 class FakeFormData { constructor(){this.values=[];} append(...args){this.values.push(args);} }
 const context = {
   document, console, Blob, Image: FakeImage, FileReader: FakeFileReader, FormData: FakeFormData,
+  confirm: () => true,
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),

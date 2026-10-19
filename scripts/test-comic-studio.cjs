@@ -30,6 +30,7 @@ els.comicStyle.value = 'Приключение';
 const anchors = [];
 const blobs = [];
 const saved = new Map();
+let failingImageRequests = 0;
 const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
   createElement: tag => { const el = new Element(tag); anchors.push(el); return el; }
@@ -57,6 +58,12 @@ const context = {
       assert.match(request.prompt, /Лея: рыжие короткие волосы/);
       assert.match(request.prompt, /Динамичный ракурс/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
+    }
+    if (url === 'https://images.test/fail-first') {
+      failingImageRequests++;
+      if (failingImageRequests === 1) return { ok: false, status: 503, text: async () => JSON.stringify({ error: { message: 'temporary provider overload' } }) };
+      assert.match(request.prompt, /Second scene/);
+      return { ok: true, json: async () => ({ data: [{ b64_json: 'c2Vjb25k' }] }) };
     }
     if (url.startsWith('https://gen.pollinations.ai/image/')) {
       assert.equal(options.method, 'GET');
@@ -179,6 +186,15 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(els.comicStatus.textContent, /Проект импортирован: 1 кадров/);
   els.comicProjectFile.listeners.change({target:{files:[{content:'{}'}],value:'bad.json'}});
   assert.match(els.comicStatus.textContent, /неподдерживаемый формат/);
+  const retryProject = {format:'ai-comic-studio-project',version:1,story:'Two scenes',characters:'Hero',mood:'Adventure',composition:'Wide',count:'2',style:'Comic',panels:[{title:'First',scene:'First scene',dialogue:'',imageUrl:''},{title:'Second',scene:'Second scene',dialogue:'',imageUrl:''}]};
+  els.comicProjectFile.listeners.change({target:{files:[{content:JSON.stringify(retryProject)}],value:'retry.json'}});
+  els.comicImageEndpoint.value = 'https://images.test/fail-first';
+  els.comicImageModel.value = 'test-model';
+  await els.comicGenerateImages.click();
+  assert.equal(failingImageRequests, 2, 'queue must continue after the first frame fails');
+  assert.match(els.comicStatus.textContent, /завершена частично: готово 1 из 2/);
+  assert.match(els.comicStatus.textContent, /temporary provider overload/);
+  assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,c2Vjb25k/);
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
   console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export');

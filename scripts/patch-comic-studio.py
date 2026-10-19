@@ -78,7 +78,7 @@ module = r"""
      const body=JSON.parse(raw);
      detail=body&&body.error?(typeof body.error==="string"?body.error:(body.error.message||JSON.stringify(body.error))):(body&&body.message)||raw;
     }catch(_){detail=raw;}
-    detail=String(detail).replace(/\\s+/g," ").trim().slice(0,320);
+    detail=String(detail).replace(/\s+/g," ").trim().slice(0,320);
    }
   }catch(_){}
   return Error(provider+" вернул HTTP "+res.status+" на кадре "+frame+(detail?": "+detail:""));

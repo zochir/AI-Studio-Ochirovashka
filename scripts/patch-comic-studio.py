@@ -127,28 +127,38 @@ module = r"""
   return Array.from({length:n},(_,i)=>({title:names[i]||("Сцена "+(i+1)),scene:chunks[Math.min(chunks.length-1,Math.floor(i*chunks.length/n))]}));
  }
  function projectData(){
-  return {format:"ai-comic-studio-project",version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels};
+  return {format:"ai-comic-studio-project",version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,panels:panels.map(p=>Object.assign({},p))};
  }
  function downloadText(filename,text,mime){
   const url=URL.createObjectURL(new Blob([text],{type:mime})),a=document.createElement("a");
   a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  }
  async function exportProject(){
-  $("comicExportProject").disabled=true;$("comicStatus").textContent="Подготовка переносимого проекта…";
+  $("comicExportProject").disabled=true;$("comicStatus").textContent="Подготовка переносимого проекта: встраиваю изображения в JSON…";
   try{
-   const data=projectData();
+   const data=projectData(),warnings=[];
    for(let i=0;i<data.panels.length;i++){
-    const src=data.panels[i].imageUrl;if(!src||/^data:image\//i.test(src))continue;
+    const panel=data.panels[i],src=panel.imageUrl;
+    delete panel.imageExportWarning;
+    if(!src||/^data:image\//i.test(src))continue;
     try{
-     const response=await fetchTimed(src,{},15000);if(!response.ok)throw Error("HTTP "+response.status);
-     const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+     const response=await fetchTimed(src,{},20000);
+     if(!response.ok)throw Error("HTTP "+response.status);
+     const blob=await response.blob();
+     if(!blob.type||!blob.type.toLowerCase().startsWith("image/"))throw Error("ответ не является изображением");
+     if(!blob.size)throw Error("пустой файл");
+     if(blob.size>20*1024*1024)throw Error("файл больше лимита 20 МБ на кадр");
+     const bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
      for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
-     data.panels[i].imageUrl="data:"+(blob.type||"image/png")+";base64,"+btoa(binary);
-    }catch(e){data.panels[i].imageExportWarning="Изображение осталось внешней ссылкой: браузер не разрешил встроить файл (возможен CORS).";}
+     panel.imageUrl="data:"+blob.type+";base64,"+btoa(binary);
+    }catch(e){
+     panel.imageExportWarning="Не удалось встроить изображение ("+e.message+"). Ссылка может не работать на другом устройстве.";
+     warnings.push("кадр "+(i+1)+": "+e.message);
+    }
    }
    downloadText("comic-project.json",JSON.stringify(data,null,2),"application/json;charset=utf-8");
    const embedded=data.panels.filter(x=>/^data:image\//i.test(x.imageUrl||"")).length,external=data.panels.filter(x=>x.imageUrl&&!/^data:image\//i.test(x.imageUrl)).length;
-   $("comicStatus").textContent="Проект JSON экспортирован. Встроенных изображений: "+embedded+"; внешних ссылок: "+external+". Ключи API не экспортируются.";
+   $("comicStatus").textContent="Проект JSON экспортирован. Изображений встроено: "+embedded+"; внешних ссылок: "+external+". Ключи API не экспортируются."+(warnings.length?" Предупреждения: "+warnings.join("; ").slice(0,500):" Все доступные изображения перенесены внутрь файла.");
   }catch(e){$("comicStatus").textContent="Не удалось экспортировать проект: "+e.message;}
   finally{$("comicExportProject").disabled=false;}
  }

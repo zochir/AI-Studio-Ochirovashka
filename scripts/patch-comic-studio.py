@@ -282,6 +282,20 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен, workflow API-формата корректен и браузеру разрешён CORS.";}
   finally{$("comicGenerateLocal").disabled=false;}
  }
+ function wrapSvgLines(value,maxChars,maxLines){
+  const words=String(value||"").replace(/\\s+/g," ").trim().split(" ").filter(Boolean),lines=[];let line="";
+  for(const word of words){
+   const next=line?line+" "+word:word;
+   if(next.length>maxChars&&line){lines.push(line);line=word;}else line=next;
+  }
+  if(line)lines.push(line);
+  if(lines.length>maxLines){lines.length=maxLines;lines[maxLines-1]=lines[maxLines-1].slice(0,Math.max(0,maxChars-1))+"…";}
+  return lines;
+ }
+ function svgTextLines(lines,x,y,lineHeight,attributes){
+  return '<text x="'+x+'" y="'+y+'" '+(attributes||'')+'>'+lines.map((line,i)=>'<tspan x="'+x+'" dy="'+(i===0?0:lineHeight)+'">'+escSvg(line)+'</tspan>').join("")+'</text>';
+ }
+ function escSvg(value){return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
  async function exportSvg(){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -303,7 +317,14 @@ module = r"""
   $("comicStatus").textContent="Подготовка экспорта: встраиваем доступные изображения…";
   try{
    const w=400,h=250,cols=2,rows=Math.ceil(panels.length/cols),images=await Promise.all(panels.map(p=>imageData(p.imageUrl)));
-   const body=panels.map((p,i)=>{const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;const art=images[i]?'<image x="8" y="8" width="368" height="100" preserveAspectRatio="xMidYMid slice" href="'+images[i]+'"/>':'<rect x="8" y="8" width="368" height="100" fill="#e2e8f0"/><text x="192" y="48" font-size="15" text-anchor="middle" fill="#334155">Иллюстрация не создана</text>';return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+'<text x="14" y="134" font-size="17" font-weight="bold">'+escXml((i+1)+". "+p.title.slice(0,32))+'</text><foreignObject x="14" y="144" width="350" height="78"><div xmlns="http://www.w3.org/1999/xhtml" style="font:14px sans-serif">'+escXml(p.scene.slice(0,150))+(p.dialogue?'<br/><b>Реплика:</b> '+escXml(p.dialogue.slice(0,100)):"")+'</div></foreignObject></g>';}).join("");
+   const body=panels.map((p,i)=>{
+    const x=(i%cols)*w+8,y=Math.floor(i/cols)*h+8;
+    const art=images[i]?'<image x="8" y="8" width="368" height="100" preserveAspectRatio="xMidYMid meet" href="'+images[i]+'"/>':'<rect x="8" y="8" width="368" height="100" fill="#e2e8f0"/><text x="192" y="48" font-size="15" text-anchor="middle" fill="#334155">Иллюстрация не создана</text>';
+    const title=svgTextLines(wrapSvgLines((i+1)+". "+(p.title||"Кадр"),38,1),14,132,19,'font-size="17" font-weight="bold"');
+    const scene=svgTextLines(wrapSvgLines(p.scene,48,3),14,153,16,'font-size="12" fill="#172033"');
+    const dialogue=p.dialogue?svgTextLines(wrapSvgLines("Реплика: "+p.dialogue,48,2),14,scene?153+wrapSvgLines(p.scene,48,3).length*16:153,15,'font-size="11" fill="#334155"'): "";
+    return '<g transform="translate('+x+' '+y+')"><rect width="384" height="234" rx="8" fill="#fff" stroke="#172033" stroke-width="3"/>'+art+title+scene+dialogue+'</g>';
+   }).join("");
    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+(cols*w)+'" height="'+(rows*h)+'" viewBox="0 0 '+(cols*w)+' '+(rows*h)+'">'+body+'</svg>';
    const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml;charset=utf-8"})),a=document.createElement("a");a.href=url;a.download="comic-storyboard.svg";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    const embedded=images.filter(Boolean).length;

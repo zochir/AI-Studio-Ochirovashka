@@ -6,6 +6,11 @@ const html = fs.readFileSync(process.argv[2], 'utf8');
 const start = html.lastIndexOf('<script>');
 const end = html.indexOf('</script>', start);
 assert(start >= 0 && end > start, 'Comic Studio inline script must exist');
+const comicSource = html.slice(start + 8, end);
+assert.match(comicSource, /data-panel-field="title"/, 'each panel must expose an editable title');
+assert.match(comicSource, /data-panel-field="scene"/, 'each panel must expose an editable scene description');
+assert.match(comicSource, /data-panel-field="dialogue"/, 'each panel must expose an editable dialogue field');
+assert.match(comicSource, /panels\[i\]\[field\]=input\.value/, 'panel edits must update the project data model');
 
 class Element {
   constructor(id) {

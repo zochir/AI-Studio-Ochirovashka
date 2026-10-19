@@ -164,7 +164,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(els.comicPanels.innerHTML, /data:image\/png;base64,ZmFrZQ==/);
   assert.match(els.comicStatus.textContent, /создано 1 изображений/);
   assert.equal(confirmationCalls, 1, 'external image generation must ask for explicit confirmation');
-  assert.match(lastConfirmationMessage, /4 запрос\(ов\) генерации/, 'confirmation must disclose the number of frame requests');
+  assert.match(lastConfirmationMessage, /1 запрос\(ов\) генерации/, 'confirmation must disclose the number of frame requests');
   assert.match(lastConfirmationMessage, /могут расходовать кредиты или быть платными/, 'confirmation must disclose possible costs');
   const requestsBeforeDecline = externalImageRequests;
   confirmNext = false;

@@ -222,7 +222,7 @@ jobs:
               actual_oid="$(sha256sum "$sample" | awk '{print $1}')"
               expected_oid="${expected_oid#sha256:}"
             else
-              actual_oid="$({ printf 'blob %s\\0' "$expected_size"; cat "$sample"; } | sha1sum | awk '{print $1}')"
+              actual_oid="$({ printf 'blob %s\0' "$expected_size"; cat "$sample"; } | sha1sum | awk '{print $1}')"
             fi
             test "$actual_oid" = "$expected_oid" || { echo "Integrity verification failed for $file"; exit 1; }
             echo "Downloaded and verified small manifest sample: $file ($actual_size bytes)"

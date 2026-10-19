@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           headers=(-H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28")
-          api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/mobile-apk-build.yml/runs?per_page=5"
+          api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/mobile-apk-build.yml/runs?branch=main&per_page=5"
           response="$(curl --fail --silent --show-error "${headers[@]}" "${api}")"
           python3 -c '
           import json, sys
@@ -38,7 +38,7 @@ jobs:
           data = json.load(sys.stdin)
           runs = data.get("workflow_runs", [])
           if not runs:
-              print("WARN: no mobile APK build runs found; watchdog will not dispatch or retry builds.")
+              print("WARN: no APK build runs found on main; watchdog will not dispatch or retry builds.")
               raise SystemExit(0)
           for run in runs:
               print("run_id={id} status={status} conclusion={conclusion} event={event} created_at={created_at} updated_at={updated_at} url={url}".format(
@@ -70,9 +70,9 @@ jobs:
                   name=a.get("name"), expired=a.get("expired"), size=a.get("size_in_bytes"), url=a.get("archive_download_url")))
           apk=[a for a in artifacts if a.get("name") == "AI-Studio-Ochirovashka-APK" and not a.get("expired")]
           if apk:
-              print("PASS: successful build has a non-expired APK artifact.")
+              print("PASS: successful main-branch build has a non-expired APK artifact.")
           else:
-              print("WARN: successful build has no available AI-Studio-Ochirovashka-APK artifact.")
+              print("WARN: successful main-branch build has no available AI-Studio-Ochirovashka-APK artifact.")
           ' <<< "${artifacts}"
           elif [[ "${status}" == "queued" || "${status}" == "in_progress" ]]; then
             if [[ "${status}" == "queued" && "${age_seconds}" -gt 900 ]]; then

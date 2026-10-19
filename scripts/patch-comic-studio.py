@@ -56,6 +56,7 @@ module = r"""
  const $=id=>document.getElementById(id);
  let panels=[];
  let nativeImageRequest=0;
+ let nativeImageWatchdog=0;
  let nativeModelRequest=0;
  let failedImageFrames=new Set();
  let characterReferenceDataUrl="";
@@ -510,15 +511,25 @@ module = r"""
   if(state!=="MODEL_PRESENT"){$("comicStatus").textContent="Сначала скачайте модель. Статус: "+state;return;}
   const prompt=[panels[0].scene,$("comicCharacters").value,$("comicStyle").value,$("comicMood").value,"cinematic composition, detailed, coherent character appearance, no text, no watermark"].filter(Boolean).join(", ");
   const id=++nativeImageRequest;$("comicGenerateNative").disabled=true;$("comicStatus").textContent="Генерация первого кадра на телефоне. Это может занять несколько минут.";
+  clearTimeout(nativeImageWatchdog);
   nativeRoot.nativeComicImageResult=function(callbackId,data,error){
    if(Number(callbackId)!==nativeImageRequest)return;
+   clearTimeout(nativeImageWatchdog);nativeImageWatchdog=0;
    $("comicGenerateNative").disabled=false;
    if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
-   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
+   if(!data||!String(data).startsWith("data:image/png;base64,")){$("comicStatus").textContent="Движок не вернул корректный PNG.";return;}
    if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
    panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне.";
   };
-  nativeRoot.AndroidDiffusion.generate(prompt,String(id));
+  // Native inference can stall on unsupported model/runtime combinations. Restore the UI
+  // after six minutes and invalidate late callbacks; this does not claim to cancel JNI work.
+  nativeImageWatchdog=setTimeout(()=>{
+   if(id!==nativeImageRequest)return;
+   nativeImageRequest++;nativeImageWatchdog=0;$("comicGenerateNative").disabled=false;
+   $("comicStatus").textContent="Локальная генерация не ответила за 6 минут. Поздний ответ будет проигнорирован; проверьте совместимость модели и движка.";
+  },360000);
+  try{nativeRoot.AndroidDiffusion.generate(prompt,String(id));}
+  catch(error){clearTimeout(nativeImageWatchdog);nativeImageWatchdog=0;$("comicGenerateNative").disabled=false;$("comicStatus").textContent="Не удалось запустить локальную генерацию: "+(error&&error.message?error.message:String(error));}
  });
  $("comicBuildWorkflow").addEventListener("click",buildBasicComfyWorkflow);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));

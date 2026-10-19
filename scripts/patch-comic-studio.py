@@ -517,6 +517,6 @@ if activity.is_file():
         source = source.replace(host_hook, host_hook + "\n        " + bridge_hook, 1)
         activity.write_text(source, encoding="utf-8")
 else:
-    raise SystemExit("MainActivity.kt not found; native diffusion bridge cannot be exposed to WebView")
+    print("Native MNN bridge source not present in this build; AndroidDiffusion UI will report unavailable.")
 
-print("Comic Studio updated: storyboard, optional text/image APIs, native MNN status bridge, portable project import/export and SVG/PNG export.")
+print("Comic Studio updated: storyboard, optional text/image APIs, optional native MNN status bridge, portable project import/export and SVG/PNG export.")

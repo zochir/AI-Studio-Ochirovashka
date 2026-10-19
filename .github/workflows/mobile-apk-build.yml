@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: mobile-apk-build-${{ github.ref }}
@@ -78,9 +79,62 @@ jobs:
             if [[ -f "$config" ]]; then echo "### $config"; sed -n '1,200p' "$config"; fi
           done
 
+      - name: Fetch verified MNN Diffusion runtime artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/mnn-diffusion-runtime.yml/runs?status=success&per_page=5"
+          run_id="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api" | jq -r '.workflow_runs[0].id // empty')"
+          test -n "$run_id" || { echo "No successful MNN Diffusion runtime build found"; exit 1; }
+          artifacts_api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/artifacts"
+          artifact_id="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$artifacts_api" | jq -r '.artifacts[] | select(.name=="MNN-Diffusion-Android-arm64-candidate" and .expired==false) | .id' | head -1)"
+          test -n "$artifact_id" || { echo "Successful runtime run $run_id has no unexpired runtime artifact"; exit 1; }
+          curl --fail --location --retry 3 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/$artifact_id/zip" -o /tmp/mnn-runtime.zip
+          mkdir -p /tmp/mnn-runtime
+          unzip -q /tmp/mnn-runtime.zip -d /tmp/mnn-runtime
+          test -s /tmp/mnn-runtime/arm64-v8a/libMNN.so
+          (cd /tmp/mnn-runtime && sha256sum -c SHA256SUMS.txt)
+          echo "MNN_RUNTIME_SOURCE_RUN=$run_id" >> "$GITHUB_ENV"
+          echo "MNN_RUNTIME_ARTIFACT_ID=$artifact_id" >> "$GITHUB_ENV"
+          echo "Verified runtime artifact $artifact_id from run $run_id"
+
+      - name: Checkout MNN headers for JNI compilation
+        uses: actions/checkout@v4
+        with:
+          repository: alibaba/MNN
+          ref: 3.6.1
+          path: mnn-source
+          fetch-depth: 1
+
+      - name: Compile Android JNI bridge and package MNN runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          if [[ ! -d "$ANDROID_NDK_HOME" ]]; then
+            sdkmanager --install "ndk;27.2.12479018"
+          fi
+          mkdir -p "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a"
+          cp /tmp/mnn-runtime/arm64-v8a/libMNN.so "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/libMNN.so"
+          cmake -S "$PROJECT_DIR/app/src/main/cpp" -B /tmp/comicdiffusion-build \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26 \
+            -DANDROID_STL=c++_static \
+            -DMNN_ROOT="$GITHUB_WORKSPACE/mnn-source" \
+            -DMNN_RUNTIME_LIB="$GITHUB_WORKSPACE/$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/libMNN.so"
+          cmake --build /tmp/comicdiffusion-build --parallel 2
+          test -s /tmp/comicdiffusion-build/libcomicdiffusion.so
+          cp /tmp/comicdiffusion-build/libcomicdiffusion.so "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/"
+          file "$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a/"*.so
+          echo "MNN runtime run: $MNN_RUNTIME_SOURCE_RUN; artifact: $MNN_RUNTIME_ARTIFACT_ID"
+
       - name: Patch Comic Studio module
         run: python3 scripts/patch-comic-studio.py "$PROJECT_DIR"
-
+        
       - name: Validate JavaScript syntax
         shell: bash
         run: |

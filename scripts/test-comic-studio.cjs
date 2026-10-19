@@ -207,6 +207,8 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(els.comicStatus.textContent, /Проект импортирован: 1 кадров/);
   els.comicProjectFile.listeners.change({target:{files:[{content:'{}'}],value:'bad.json'}});
   assert.match(els.comicStatus.textContent, /неподдерживаемый формат/);
+  els.comicLocalEndpoint.value = '';
+  els.comicWorkflow.value = '';
   const retryProject = {format:'ai-comic-studio-project',version:1,story:'Two scenes',characters:'Hero',mood:'Adventure',composition:'Wide',count:'2',style:'Comic',panels:[{title:'First',scene:'First scene',dialogue:'',imageUrl:''},{title:'Second',scene:'Second scene',dialogue:'',imageUrl:''}]};
   els.comicProjectFile.listeners.change({target:{files:[{content:JSON.stringify(retryProject)}],value:'retry.json'}});
   els.comicImageEndpoint.value = 'https://images.test/fail-first';

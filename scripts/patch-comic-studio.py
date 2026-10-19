@@ -48,7 +48,7 @@ module = r"""
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
-<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button><button id="comicExportPng" type="button">Экспорт PNG-страницы</button>
+<button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button><button id="comicExportPng" type="button">Экспорт PNG-страницы</button><button id="comicExportHtml" type="button">Экспорт готового комикса HTML</button>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
 <script>
@@ -326,7 +326,37 @@ module = r"""
   return '<text x="'+x+'" y="'+y+'" '+(attributes||'')+'>'+lines.map((line,i)=>'<tspan x="'+x+'" dy="'+(i===0?0:lineHeight)+'">'+escSvg(line)+'</tspan>').join("")+'</text>';
  }
  function escSvg(value){return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
- async function exportSvg(format){
+ async async function exportHtml(){
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  const button=$("comicExportHtml");button.disabled=true;
+  $("comicStatus").textContent="Создаю автономный HTML-комикс: встраиваю изображения…";
+  try{
+   const imageData=async src=>{
+    if(!src)return "";
+    if(/^data:image\//i.test(src))return src;
+    const response=await fetchTimed(src,{},20000);
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const blob=await response.blob();
+    if(!blob.type||!blob.type.toLowerCase().startsWith("image/")||!blob.size)throw Error("источник не вернул непустое изображение");
+    if(blob.size>20*1024*1024)throw Error("изображение превышает 20 МБ");
+    const bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+    for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
+    return "data:"+blob.type+";base64,"+btoa(binary);
+   };
+   const images=await Promise.all(panels.map(async(p,i)=>{try{return await imageData(p.imageUrl);}catch(e){return "";}}));
+   const cards=panels.map((p,i)=>{
+    const art=images[i]?'<img src="'+esc(images[i])+'" alt="Иллюстрация кадра '+(i+1)+'">':'<div class="placeholder">Иллюстрация не встроена'+(p.imageUrl?' — исходная ссылка недоступна':' — кадр ещё не сгенерирован')+'</div>';
+    return '<article class="panel"><div class="art">'+art+'</div><div class="copy"><div class="number">КАДР '+(i+1)+' / '+panels.length+'</div><h2>'+esc(p.title||("Кадр "+(i+1)))+'</h2><p>'+esc(p.scene||"").replace(/\n/g,"<br>")+'</p>'+(p.dialogue?'<blockquote>'+esc(p.dialogue).replace(/\n/g,"<br>")+'</blockquote>':'')+'</div></article>';
+   }).join("\n");
+   const title=String($("comicStory").value.trim()||"Мой комикс").slice(0,180);
+   const doc='<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><style>html{background:#e8edf4;color:#182235;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}body{margin:0}.book{max-width:900px;margin:0 auto;padding:24px}.cover{padding:28px 24px;background:#182235;color:#fff;border-radius:14px;margin-bottom:22px}.cover h1{margin:0 0 10px;font-size:clamp(1.8rem,5vw,3rem)}.cover p{white-space:pre-wrap;line-height:1.5}.panel{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:#fff;border:2px solid #182235;border-radius:12px;overflow:hidden;margin:0 0 20px;break-inside:avoid;box-shadow:4px 5px 0 #182235}.art{min-height:240px;background:#dce4ee;display:flex;align-items:center;justify-content:center}.art img{display:block;width:100%;height:100%;max-height:440px;object-fit:contain}.placeholder{padding:24px;text-align:center;color:#475569}.copy{padding:20px;align-self:center}.number{font-size:.75rem;letter-spacing:.12em;font-weight:800;color:#596579}h2{margin:.5rem 0;font-size:1.45rem}p{line-height:1.55;white-space:pre-wrap}blockquote{margin:16px 0 0;padding:12px 14px;border-left:4px solid #4f46e5;background:#eef2ff;white-space:pre-wrap;line-height:1.5;font-weight:600}.footer{color:#596579;text-align:center;font-size:.85rem;padding:16px}@media(max-width:620px){.book{padding:12px}.panel{grid-template-columns:1fr}.art{min-height:180px}.art img{max-height:340px}.copy{padding:15px}}@media print{html{background:#fff}.book{max-width:none;padding:0}.cover{background:#fff;color:#182235;border:2px solid #182235;margin-bottom:12px}.panel{box-shadow:none;margin-bottom:12px;break-inside:avoid;page-break-inside:avoid}.art{min-height:180px}.art img{max-height:280px}.footer{display:none}@page{margin:12mm}}</style></head><body><main class="book"><header class="cover"><h1>'+esc(title)+'</h1><p>'+esc($("comicCharacters").value||"")+'</p></header>'+cards+'<div class="footer">Автономный экспорт AI Comic Studio · изображения встроены в файл, если были доступны</div></main></body></html>';
+   downloadText("comic-reader.html",doc,"text/html;charset=utf-8");
+   const embedded=images.filter(Boolean).length;
+   $("comicStatus").textContent="Автономный HTML-комикс экспортирован. Встроено изображений: "+embedded+" из "+panels.length+". Файл можно открыть в браузере и распечатать в PDF."+(embedded<panels.filter(p=>p.imageUrl).length?" Часть изображений недоступна из-за CORS или размера; для них добавлены заглушки.":"");
+  }catch(e){$("comicStatus").textContent="Не удалось экспортировать HTML-комикс: "+e.message;}
+  finally{button.disabled=false;}
+ }
+ function exportSvg(format){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const imageData=async src=>{
@@ -392,6 +422,7 @@ module = r"""
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));
  $("comicExport").addEventListener("click",()=>exportSvg("svg"));
  $("comicExportPng").addEventListener("click",()=>exportSvg("png"));
+ $("comicExportHtml").addEventListener("click",exportHtml);
  $("comicSave").addEventListener("click",saveProject);
  $("comicLoad").addEventListener("click",loadProject);
  $("comicExportProject").addEventListener("click",exportProject);

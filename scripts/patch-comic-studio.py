@@ -156,23 +156,47 @@ module = r"""
   try{
    if(endpoint){
     if(!/^https?:\/\//i.test(endpoint)||!model)throw Error("Для текстового ИИ укажите корректный endpoint и модель. Ключ нужен только если его требует сервер.");
+    const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,temperature:.7,messages:[{role:"system",content:"Верни только JSON-массив из "+n+" объектов с полями title, scene, dialogue на русском языке. Это последовательные кадры одного комикса. Сохраняй внешний вид героев, причинно-следственную связь, разнообразие планов и эмоций. Учитывай паспорт персонажей и атмосферу."},{role:"user",content:"Визуальный стиль: "+$("comicStyle").value+". Атмосфера: "+mood+". Композиция: "+composition+". Паспорт персонажей: "+(characters||"создай подходящих сюжету героев и сохраняй их внешний вид")+". Сюжет: "+story}]})});
+    if(!res.ok)throw Error("Текстовый API вернул HTTP "+res.status);
+    const data=await res.json(),raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    if(!raw)throw Error("В ответе текстового API нет сценария.");
+    const parsed=JSON.parse(String(raw).replace(/^\x60\x60\x60(?:json)?\s*/i,"").replace(/\s*\x60\x60\x60$/,""));
+    if(!Array.isArray(parsed)||!parsed.length)throw Error("Ожидался JSON-массив кадров.");
+    render(parsed.slice(0,n));$("comicStatus").textContent="Сценарий создан ИИ. Следующий шаг — сгенерировать изображения кадров.";
+   }else{
+    render(localScenes(story,n));$("comicStatus").textContent="Создана локальная текстовая раскадровка. Для сценария от ИИ укажите настройки текстового API.";
+   }
+  }catch(e){$("comicStatus").textContent="Ошибка сценария: "+e.message;}
+  finally{$("comicGenerate").disabled=false;}
+ }
+ async function generateImages(){
+  const endpoint=$("comicImageEndpoint").value.trim(),model=$("comicImageModel").value.trim(),key=$("comicImageKey").value;
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
+  if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
+  $("comicGenerateImages").disabled=true;
+  try{
+   let completed=0;
+   for(let i=0;i<panels.length;i++){
+    $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
+    const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
     let imageUrl="";
-    if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
-     const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
-     const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}});
-     if(!res.ok)throw Error("Pollinations вернул HTTP "+res.status+" на кадре "+(i+1));
-     const blob=await res.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
-     for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
-     imageUrl="data:"+(blob.type||"image/jpeg")+";base64,"+btoa(binary);
-    }else{
-     const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
-     if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
-     const data=await res.json(),item=data.data&&data.data[0];
-     if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
-     imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
-    }
-    if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
-    panels[i].imageUrl=imageUrl;completed++;render(panels);
+     if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
+      const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
+      const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}});
+      if(!res.ok)throw Error("Pollinations вернул HTTP "+res.status+" на кадре "+(i+1));
+      const blob=await res.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+      for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
+      imageUrl="data:"+(blob.type||"image/jpeg")+";base64,"+btoa(binary);
+     }else{
+      const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
+      if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
+      const data=await res.json(),item=data.data&&data.data[0];
+      if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
+      imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
+     }
+     if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
+     panels[i].imageUrl=imageUrl;completed++;render(panels);
    }
    $("comicStatus").textContent="Готово: изображения получены для "+completed+" из "+panels.length+" кадров.";
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}

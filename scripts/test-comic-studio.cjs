@@ -23,7 +23,7 @@ class Element {
   getContext(kind) { if (kind !== '2d') return null; return { fillStyle: '', fillRect() {}, drawImage() {} }; }
   toBlob(callback, type) { callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type })); }
 }
-const ids = ['comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
+const ids = ['comicReferenceFile', 'comicReferenceStatus', 'comicStory', 'comicCharacterName', 'comicCharacterLook', 'comicAddCharacter', 'comicCharacters', 'comicMood', 'comicComposition', 'comicCount', 'comicStyle', 'comicEndpoint', 'comicModel', 'comicKey',
   'comicImageEndpoint', 'comicImageModel', 'comicImageKey', 'comicLocalEndpoint', 'comicWorkflow', 'comicCheckLocal', 'comicGenerateLocal', 'comicGenerate', 'comicGenerateImages',
   'comicRetryImages', 'comicSave', 'comicLoad', 'comicExportProject', 'comicImportProject', 'comicProjectFile', 'comicExport', 'comicExportPng', 'comicExportHtml', 'comicStatus', 'comicPanels'];
 const els = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -51,15 +51,17 @@ class FakeImage {
 }
 class FakeFileReader {
   readAsText(file) { this.result = file.content; if (this.onload) this.onload(); }
+  readAsDataURL(file) { this.result = 'data:image/png;base64,cmVm'; if (this.onload) this.onload(); }
 }
+class FakeFormData { constructor(){this.values=[];} append(...args){this.values.push(args);} }
 const context = {
-  document, console, Blob, Image: FakeImage, FileReader: FakeFileReader,
+  document, console, Blob, Image: FakeImage, FileReader: FakeFileReader, FormData: FakeFormData,
   URL: { createObjectURL: blob => { blobs.push(blob); return 'blob:comic-test'; }, revokeObjectURL: () => {} },
   localStorage: { setItem: (k,v) => saved.set(k,v), getItem: k => saved.has(k) ? saved.get(k) : null },
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
   setTimeout: (fn, ms) => { if (ms === 8000 || ms >= 10000) return 999999; fn(); return 1; }, clearTimeout: () => {},
   fetch: async (url, options) => {
-    const request = options && options.body ? JSON.parse(options.body) : {};
+    const request = options && typeof options.body === 'string' ? JSON.parse(options.body) : {};
     if (url === 'https://api.test/v1/chat/completions') {
       if (options.headers.Authorization) assert.equal(options.headers.Authorization, 'Bearer temporary-test-key');
       assert.equal(request.model, 'test-model');
@@ -94,6 +96,8 @@ const context = {
     if (url === 'http://comfy.test:8188/system_stats') {
       return { ok: true, json: async () => ({ devices: [{ name: 'test-device' }] }) };
     }
+    if (url === 'data:image/png;base64,cmVm') return { ok: true, blob: async () => new Blob([new Uint8Array([1,2,3])], {type:'image/png'}) };
+    if (url === 'http://comfy.test:8188/upload/image') { assert.equal(options.method,'POST'); assert.ok(options.body instanceof FakeFormData); return {ok:true,json:async()=>({name:'character-reference.png',subfolder:''})}; }
     if (url === 'http://comfy.test:8188/prompt') {
       localPromptRequests++;
       localLastRequest = request;
@@ -183,9 +187,13 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerateLocal.click();
   assert.match(els.comicStatus.textContent, /не содержит __PROMPT__/);
   els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
+  els.comicReferenceFile.files = [{type:'image/png',size:10}];
+  els.comicReferenceFile.listeners.change({target:els.comicReferenceFile});
+  els.comicWorkflow.value = '{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__","text":"__PROMPT__","seed":"__SEED__"}}}';
   els.comicGenerateLocal.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   console.log('LOCAL STATUS:', els.comicStatus.textContent);
+  assert.match(JSON.stringify(localLastRequest), /character-reference\.png/);
   assert.match(els.comicPanels.innerHTML, /comfy\.test:8188\/view\?/);
   assert.match(els.comicStatus.textContent, /ComfyUI завершил генерацию/);
   // Local OpenAI-compatible endpoints may not require API keys.

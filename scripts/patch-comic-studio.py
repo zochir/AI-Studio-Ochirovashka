@@ -44,7 +44,7 @@ module = r"""
 <p class="comic-note">Запустите ComfyUI на своём компьютере и включите доступ из локальной сети. Вставьте API-workflow JSON из ComfyUI. В workflow укажите строку __PROMPT__ в поле positive prompt, которое нужно заменить описанием кадра. Для WebView/браузера ComfyUI должен разрешать CORS для origin приложения. Не открывайте ComfyUI в интернет без защиты.</p>
 <label for="comicLocalEndpoint">Адрес локального ComfyUI</label><input id="comicLocalEndpoint" type="url" placeholder="http://192.168.1.20:8188">
 <label for="comicReferenceFile">Референс внешности персонажа (необязательно)</label><input id="comicReferenceFile" type="file" accept="image/png,image/jpeg,image/webp"><p class="comic-note">До 2 МБ. Для использования референса добавьте в ComfyUI API-workflow узел Load Image и подключите его к IPAdapter или другому reference-conditioning узлу. В поле имени изображения укажите __CHARACTER_REFERENCE__. Без такого подключения изображение не влияет на результат.</p><p id="comicReferenceStatus" class="comic-note">Референс не выбран.</p><label for="comicWorkflow">API workflow JSON</label><textarea id="comicWorkflow" rows="5" placeholder='{"1":{"inputs":{"image":"__CHARACTER_REFERENCE__"}},"2":{"inputs":{"text":"__PROMPT__"}}}'></textarea>
-<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
+<button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
 <button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
@@ -254,6 +254,35 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
+ async function buildBasicComfyWorkflow(){
+  const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,"");
+  if(!base){$("comicStatus").textContent="Сначала укажите адрес ComfyUI.";return;}
+  const button=$("comicBuildWorkflow");button.disabled=true;
+  $("comicStatus").textContent="Получаю список установленных моделей ComfyUI…";
+  try{
+   const response=await fetchTimed(base+"/object_info/CheckpointLoaderSimple",{method:"GET"},8000);
+   if(!response.ok)throw Error("HTTP "+response.status);
+   const info=await response.json();
+   const schema=info&&info.CheckpointLoaderSimple&&info.CheckpointLoaderSimple.input&&info.CheckpointLoaderSimple.input.required;
+   const choices=schema&&schema.ckpt_name&&schema.ckpt_name[0];
+   if(!Array.isArray(choices)||!choices.length)throw Error("ComfyUI не сообщил установленные checkpoint-модели. Скопируйте модель в ComfyUI/models/checkpoints и перезапустите сервер.");
+   const checkpoint=String(choices[0]);
+   const workflow={
+    "1":{"class_type":"CheckpointLoaderSimple","inputs":{"ckpt_name":checkpoint}},
+    "2":{"class_type":"CLIPTextEncode","inputs":{"text":"__PROMPT__","clip":["1",1]}},
+    "3":{"class_type":"CLIPTextEncode","inputs":{"text":"low quality, low resolution, blurry, deformed anatomy, extra fingers, extra limbs, duplicate people, text, letters, watermark, logo, plastic skin, oversmoothed face","clip":["1",1]}},
+    "4":{"class_type":"EmptyLatentImage","inputs":{"width":768,"height":768,"batch_size":1}},
+    "5":{"class_type":"KSampler","inputs":{"seed":"__SEED__","steps":24,"cfg":6.5,"sampler_name":"euler","scheduler":"normal","denoise":1,"model":["1",0],"positive":["2",0],"negative":["3",0],"latent_image":["4",0]}},
+    "6":{"class_type":"VAEDecode","inputs":{"samples":["5",0],"vae":["1",2]}},
+    "7":{"class_type":"SaveImage","inputs":{"filename_prefix":"AIComicStudio","images":["6",0]}}
+   };
+   $("comicWorkflow").value=JSON.stringify(workflow,null,2);
+   $("comicStatus").textContent="Базовый workflow создан для модели «"+checkpoint+"». Проверьте подключение и запустите локальную генерацию.";
+  }catch(e){
+   const reason=e&&e.name==="AbortError"?"тайм-аут (8 секунд)":e.message;
+   $("comicStatus").textContent="Не удалось собрать workflow: "+reason+". Проверьте адрес, сервер и разрешение CORS.";
+  }finally{button.disabled=false;}
+ }
  async function checkLocalConnection(){
   const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,"");
   if(!base){$("comicStatus").textContent="Укажите адрес ComfyUI.";return;}
@@ -440,6 +469,7 @@ module = r"""
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
+ $("comicBuildWorkflow").addEventListener("click",buildBasicComfyWorkflow);
  $("comicGenerateLocal").addEventListener("click",()=>generateLocalImages(false));
  $("comicExport").addEventListener("click",()=>exportSvg("svg"));
  $("comicExportPng").addEventListener("click",()=>exportSvg("png"));

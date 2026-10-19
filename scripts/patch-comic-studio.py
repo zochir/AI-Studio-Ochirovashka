@@ -216,6 +216,8 @@ module = r"""
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
   if(!/^https?:\/\//i.test(endpoint)){$("comicStatus").textContent="Endpoint должен начинаться с http:// или https://.";return;}
+  const providerName=endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"?"Pollinations":"внешний Images API";
+  if(typeof confirm==="function"&&!confirm("Перед отправкой запросов в "+providerName+" проверьте тариф и остаток квоты. Генерация может расходовать кредиты или быть платной. Продолжить?")){$("comicStatus").textContent="Генерация отменена: запросы не отправлялись.";return;}
   $("comicGenerateImages").disabled=true;
   try{
    let completed=0;const failures=[];

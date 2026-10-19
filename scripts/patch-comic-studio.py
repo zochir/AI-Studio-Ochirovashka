@@ -499,7 +499,7 @@ module = r"""
  $("comicCheckNative").addEventListener("click",()=>{if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=nativeRoot.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
  $("comicDownloadNativeModel").addEventListener("click",()=>{
   if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.downloadModel!=="function"){$("comicNativeModelProgress").textContent="Нативный движок отсутствует в этой сборке.";return;}
-  if(!confirm("Скачать на телефон модель Stable Diffusion размером около 1,15 ГБ? Нужен Wi-Fi или безлимитный интернет и дополнительное свободное место. Загрузка начнётся только после подтверждения."))return;
+  if(typeof confirm!=="function"||!confirm("Скачать на телефон модель Stable Diffusion размером около 1,15 ГБ? Нужен Wi-Fi или безлимитный интернет и дополнительное свободное место. Загрузка начнётся только после подтверждения."))return;
   const id=++nativeModelRequest;$("comicDownloadNativeModel").disabled=true;$("comicNativeModelProgress").textContent="Подключение к репозиторию модели…";
   nativeRoot.AndroidDiffusion.downloadModel(String(id));
  });

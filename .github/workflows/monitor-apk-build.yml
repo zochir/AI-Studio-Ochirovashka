@@ -23,6 +23,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: workflowPath,
+              branch: "main",
               per_page: 10
             });
             const run = runs.data.workflow_runs[0];
@@ -31,7 +32,7 @@ jobs:
               return;
             }
             const ageMinutes = (Date.now() - Date.parse(run.updated_at)) / 60000;
-            core.info(`Latest APK run #${run.run_number}: ${run.status}/${run.conclusion}; last updated ${ageMinutes.toFixed(1)} minutes ago.`);
+            core.info(`Latest APK run on main #${run.run_number}: ${run.status}/${run.conclusion}; last updated ${ageMinutes.toFixed(1)} minutes ago.`);
             if (run.status !== "in_progress" || ageMinutes < 45) {
               core.info("No stalled in-progress build detected.");
               return;

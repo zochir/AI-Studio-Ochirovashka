@@ -100,6 +100,11 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(anchors.length, 1);
   assert.equal(anchors[0].download, 'comic-storyboard.svg');
   assert.equal(anchors[0].clicked, true);
+  const exportedSvg = await blobs[0].text();
+  assert.match(exportedSvg, /<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  assert.match(exportedSvg, /<tspan/);
+  assert.doesNotMatch(exportedSvg, /foreignObject/, 'export should not rely on HTML foreignObject rendering');
+  assert.match(exportedSvg, /Иллюстрация не создана/);
 
   els.comicEndpoint.value = 'https://api.test/v1/chat/completions';
   els.comicModel.value = 'test-model';

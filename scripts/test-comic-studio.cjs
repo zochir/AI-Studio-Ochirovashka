@@ -58,6 +58,13 @@ const context = {
       assert.match(request.prompt, /Динамичный ракурс/);
       return { ok: true, json: async () => ({ data: [{ b64_json: 'ZmFrZQ==' }] }) };
     }
+    if (url.startsWith('https://gen.pollinations.ai/image/')) {
+      assert.equal(options.method, 'GET');
+      assert.equal(options.headers.Authorization, 'Bearer pollinations-test-key');
+      assert.match(decodeURIComponent(url), /AI scene/);
+      assert.match(url, /model=flux/);
+      return { ok: true, blob: async () => new Blob([new Uint8Array([1,2,3,4])], {type:'image/jpeg'}) };
+    }
     if (url === 'http://comfy.test:8188/system_stats') {
       return { ok: true, json: async () => ({ devices: [{ name: 'test-device' }] }) };
     }
@@ -148,6 +155,15 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   els.comicGenerateImages.click();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  els.comicImageEndpoint.value = 'https://gen.pollinations.ai/image/';
+  els.comicImageModel.value = 'flux';
+  els.comicImageKey.value = 'pollinations-test-key';
+  await els.comicGenerateImages.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.match(els.comicStatus.textContent, /изображения получены для 1 из 1 кадров/);
+  assert.match(els.comicPanels.innerHTML, /data:image\\/jpeg;base64,AQIDBA==/);
+  assert.equal(els.comicImageEndpoint.value, 'https://gen.pollinations.ai/image/');
+
   els.comicCharacterName.value = 'Тар';
   els.comicCharacterLook.value = 'синяя броня, серебряные глаза, шрам над бровью';
   els.comicAddCharacter.click();
@@ -165,5 +181,5 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.match(els.comicStatus.textContent, /неподдерживаемый формат/);
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);
-  console.log('PASS: storyboard, character bible, text/image APIs, ComfyUI adapter, SVG and portable JSON project import/export');
+  console.log('PASS: storyboard, character bible, OpenAI-compatible and Pollinations image APIs, ComfyUI adapter, SVG and portable JSON import/export');
 })().catch(error => { console.error(error); process.exit(1); });

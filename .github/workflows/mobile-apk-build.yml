@@ -155,6 +155,10 @@ jobs:
           echo "MNN_RUNTIME_SOURCE_RUN=$run_id" >> "$GITHUB_ENV"
           echo "MNN_RUNTIME_ARTIFACT_ID=$artifact_id" >> "$GITHUB_ENV"
           echo "Verified runtime artifact $artifact_id from run $run_id"
+          echo "--- Verified MNN runtime build metadata ---"
+          cat /tmp/mnn-runtime/BUILD-INFO.txt
+          grep -q "MNN source ref: 3.6.1" /tmp/mnn-runtime/BUILD-INFO.txt
+          grep -q "Diffusion enabled: true" /tmp/mnn-runtime/BUILD-INFO.txt
 
       - name: Checkout MNN headers for JNI compilation
         uses: actions/checkout@v4

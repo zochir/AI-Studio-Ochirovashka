@@ -184,8 +184,9 @@ jobs:
           test -s /tmp/sd15-tokenizer-output/tokenizer.mtok || { echo "MNN tokenizer export did not produce tokenizer.mtok"; exit 1; }
           mkdir -p "$PROJECT_DIR/app/src/main/assets"
           cp /tmp/sd15-tokenizer-output/tokenizer.mtok "$PROJECT_DIR/app/src/main/assets/tokenizer.mtok"
-          sha256sum "$PROJECT_DIR/app/src/main/assets/tokenizer.mtok"
-          echo "Exported official CLIP tokenizer to MNN .mtok format."
+          sha256sum "$PROJECT_DIR/app/src/main/assets/tokenizer.mtok" | awk '{print $1}' > "$PROJECT_DIR/app/src/main/assets/tokenizer.sha256"
+          cat "$PROJECT_DIR/app/src/main/assets/tokenizer.sha256"
+          echo "Exported official CLIP tokenizer to MNN .mtok format and wrote its SHA-256 manifest."
 
       - name: Compile Android JNI bridge and package MNN runtime
         shell: bash

@@ -47,7 +47,7 @@ module = r"""
 <button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button>
 </details>
 <button id="comicGenerate" type="button">Создать раскадровку</button>
-<button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button>
+<button id="comicGenerateImages" type="button">Сгенерировать изображения кадров</button><button id="comicRetryImages" type="button" disabled>Повторить неудачные кадры</button>
 <button id="comicSave" type="button">Сохранить проект</button><button id="comicLoad" type="button">Загрузить проект</button><button id="comicExportProject" type="button">Экспорт проекта JSON</button><button id="comicImportProject" type="button">Импорт проекта JSON</button><input id="comicProjectFile" type="file" accept="application/json,.json" hidden><button id="comicExport" type="button">Экспорт SVG-страницы</button>
 <p id="comicStatus" role="status" aria-live="polite"></p><div id="comicPanels" class="comic-grid"></div>
 </section>
@@ -55,6 +55,7 @@ module = r"""
 (function(){
  const $=id=>document.getElementById(id);
  let panels=[];
+ let failedImageFrames=new Set();
  const PROJECT_KEY="ai-studio-comic-project-v1";
  const names=["Завязка","Открытие","Развитие","Поворот","Кульминация","Развязка","Финал","Эпилог"];
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -183,7 +184,7 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Ошибка сценария: "+e.message;}
   finally{$("comicGenerate").disabled=false;}
  }
- async function generateImages(){
+ async function generateImages(retryOnly=false){
   const endpoint=$("comicImageEndpoint").value.trim(),model=$("comicImageModel").value.trim(),key=$("comicImageKey").value;
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   if(!endpoint||!model){$("comicStatus").textContent="Для генерации изображений укажите endpoint и модель. Ключ нужен только если его требует сервер.";return;}
@@ -191,8 +192,10 @@ module = r"""
   $("comicGenerateImages").disabled=true;
   try{
    let completed=0;const failures=[];
-   for(let i=0;i<panels.length;i++){
-    $("comicStatus").textContent="Генерация изображения "+(i+1)+" из "+panels.length+"…";
+   const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
+   if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных кадров для повтора.":"В проекте нет кадров.";return;}
+   for(const i of indices){
+    $("comicStatus").textContent=(retryOnly?"Повторная генерация кадра ":"Генерация изображения ")+(i+1)+" из "+panels.length+"…";
     try{
      const prompt="Create one finished comic panel illustration, not an icon, logo, paint palette, easel, artist tools, or placeholder. Depict the actual scene described below. No text, letters, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact appearance, outfit, age and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Story scene: "+panels[i].scene+". Character/dialogue context: "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving character identity. No captions or lettering.";
      let imageUrl="";
@@ -213,10 +216,11 @@ module = r"""
       imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
      }
      if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
-     panels[i].imageUrl=imageUrl;completed++;render(panels);
-    }catch(frameError){failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю очередь. Готово "+completed+" из "+panels.length+"…";}
+     panels[i].imageUrl=imageUrl;failedImageFrames.delete(i);completed++;render(panels);
+    }catch(frameError){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю очередь. Готово в этом запуске "+completed+" из "+indices.length+"…";}
    }
-   $("comicStatus").textContent=failures.length?"Генерация завершена частично: готово "+completed+" из "+panels.length+". Ошибки: "+failures.join(" | ").slice(0,900)+". Уже готовые изображения сохранены; повторите генерацию для оставшихся кадров.":"Готово: изображения получены для "+completed+" из "+panels.length+" кадров.";
+   $("comicRetryImages").disabled=failedImageFrames.size===0;
+   $("comicStatus").textContent=failures.length?"Генерация завершена частично: в этом запуске готово "+completed+" из "+indices.length+". Ошибки: "+failures.join(" | ").slice(0,900)+". Нажмите «Повторить неудачные кадры», чтобы повторить только сбойные запросы.":"Готово: в этом запуске создано "+completed+" изображений. Неудачных кадров осталось: "+failedImageFrames.size+".";
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
@@ -309,7 +313,8 @@ module = r"""
  }
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
- $("comicGenerateImages").addEventListener("click",generateImages);
+ $("comicGenerateImages").addEventListener("click",()=>generateImages(false));
+ $("comicRetryImages").addEventListener("click",()=>generateImages(true));
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);

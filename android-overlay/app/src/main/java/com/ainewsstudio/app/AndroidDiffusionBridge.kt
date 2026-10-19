@@ -32,7 +32,7 @@ class AndroidDiffusionBridge(
         } catch (e: Exception) {
             return "TOKENIZER_UNAVAILABLE:" + (e.message ?: "tokenizer.mtok missing")
         }
-        val required = listOf("text_encoder.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.mtok")
+        val required = MODEL_FILES + "tokenizer.mtok"
         val missing = required.filter { !File(modelDir, it).isFile || File(modelDir, it).length() == 0L }
         return if (missing.isEmpty()) "MODEL_PRESENT" else "MODEL_MISSING:" + missing.joinToString(",")
     }

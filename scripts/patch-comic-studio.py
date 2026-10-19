@@ -251,7 +251,7 @@ module = r"""
    $("comicStatus").textContent="Не удалось подключиться к ComfyUI: "+reason+". Проверьте адрес, что сервер запущен, доступ по локальной сети и CORS.";
   }finally{button.disabled=false;}
  }
- async function generateLocalImages(){
+ async function generateLocalImages(retryOnly=false){
   const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,""),workflowText=$("comicWorkflow").value.trim();
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   if(!base||!workflowText){$("comicStatus").textContent="Укажите адрес ComfyUI и API workflow JSON.";return;}
@@ -259,11 +259,13 @@ module = r"""
   try{template=JSON.parse(workflowText);}catch(e){$("comicStatus").textContent="Workflow JSON некорректен: "+e.message;return;}
   let placeholderCount=0;const countPlaceholders=v=>{if(typeof v==="string"){const m=v.match(/__PROMPT__/g);placeholderCount+=m?m.length:0;}else if(Array.isArray(v))v.forEach(countPlaceholders);else if(v&&typeof v==="object")Object.values(v).forEach(countPlaceholders);};countPlaceholders(template);
   if(!placeholderCount){$("comicStatus").textContent="Workflow не содержит __PROMPT__. Добавьте этот маркер в positive prompt API-workflow, иначе каждый кадр будет генерироваться по одному и тому же запросу.";return;}
-  $("comicGenerateLocal").disabled=true;
+  const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
+  if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных локальных кадров для повтора.":"В проекте нет кадров.";return;}
+  $("comicGenerateLocal").disabled=true;$("comicRetryImages").disabled=true;
   let completed=0;const failures=[];
   try{
-   for(let i=0;i<panels.length;i++){
-    $("comicStatus").textContent="Локальная генерация: отправка кадра "+(i+1)+" из "+panels.length+"…";
+   for(const i of indices){
+    $("comicStatus").textContent=(retryOnly?"Повтор локального кадра ":"Локальная генерация: отправка кадра ")+(i+1)+" из "+panels.length+"…";
     try{
      const previousScene=i>0?panels[i-1].scene:"Opening shot; establish setting and character appearances.";
      const nextScene=i<panels.length-1?panels[i+1].scene:"Final shot; visually resolve the action.";
@@ -292,9 +294,9 @@ module = r"""
     }catch(frameError){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+frameError.message);$("comicStatus").textContent="Кадр "+(i+1)+" не создан; продолжаю локальную очередь. Готово "+completed+" из "+panels.length+"…";}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;
-   $("comicStatus").textContent=failures.length?"Локальная генерация завершена частично: готово "+completed+" из "+panels.length+". Ошибки: "+failures.join(" | ").slice(0,900)+". Уже созданные изображения сохранены; повторный запуск снова пройдёт по кадрам.":"ComfyUI завершил генерацию всех "+panels.length+" кадров.";
+   $("comicStatus").textContent=failures.length?"Локальная генерация завершена частично: готово "+completed+" из "+indices.length+" в этом запуске. Ошибки: "+failures.join(" | ").slice(0,900)+". Уже созданные изображения сохранены; повторите только неудачные кадры.":(retryOnly?"Повтор локальных кадров завершён: создано "+completed+". Неудачных кадров осталось: 0.":"ComfyUI завершил генерацию всех "+panels.length+" кадров.");
   }catch(e){$("comicStatus").textContent="Локальная генерация не завершена: "+e.message+" Проверьте, что ComfyUI запущен и workflow API-формата корректен.";}
-  finally{$("comicGenerateLocal").disabled=false;}
+  finally{$("comicGenerateLocal").disabled=false;$("comicRetryImages").disabled=failedImageFrames.size===0;}
  }
  function wrapSvgLines(value,maxChars,maxLines){
   const words=String(value||"").replace(/\s+/g," ").trim().split(" ").filter(Boolean),lines=[];let line="";
@@ -370,7 +372,7 @@ module = r"""
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",()=>generateImages(false));
- $("comicRetryImages").addEventListener("click",()=>generateImages(true));
+ $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())generateLocalImages(true);else generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicGenerateLocal").addEventListener("click",generateLocalImages);

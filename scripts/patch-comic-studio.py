@@ -348,7 +348,7 @@ module = r"""
       try{bridge.generate(prompt,String(id));}catch(e){finish(Error(e&&e.message?e.message:String(e)));}
      });
      panels[i].imageUrl=data;failedImageFrames.delete(i);completed++;render(panels);
-     try{localStorage.setItem(PROJECT_KEY,JSON.stringify({version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,panels:panels}));}catch(_){}
+     saveProject();
     }catch(e){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+e.message);}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;
@@ -574,7 +574,7 @@ module = r"""
  });
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
- $("comicGenerateImages").addEventListener("click",()=>{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function"&&nativeRoot.AndroidDiffusion.status()==="MODEL_PRESENT")return generateNativeImages();if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);generateImages(false);});
+ $("comicGenerateImages").addEventListener("click",()=>{let nativeStatus="";try{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function")nativeStatus=nativeRoot.AndroidDiffusion.status();}catch(e){nativeStatus="STATUS_ERROR";}if(nativeStatus==="MODEL_PRESENT")return generateNativeImages();if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);if($("comicImageEndpoint").value.trim()&&$("comicImageModel").value.trim())return generateImages(false);if(nativeStatus)return $("comicStatus").textContent="Локальная модель на телефоне не установлена или недоступна ("+nativeStatus+"). Ничего не скачано. Откройте «Дополнительно» и выберите ComfyUI или внешний генератор.";generateImages(false);});
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);

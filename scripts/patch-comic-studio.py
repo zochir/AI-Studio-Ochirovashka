@@ -24,6 +24,9 @@ module = r"""
 #comicLab .comic-main-actions .comic-primary{background:#4338ca}
 #comicLab .comic-main-actions .comic-primary-art{background:#0f766e}
 #comicLab .comic-main-actions .comic-primary-save{background:#475569}
+#comicLab .comic-save-project{width:100%;margin-top:8px;background:#475569}
+#comicLab .comic-options{margin-top:14px}
+#comicLab .comic-options summary{font-weight:650}
 #comicLab .comic-secondary{background:#64748b}
 #comicLab .comic-file-tools{margin-top:12px}
 #comicLab .comic-file-tools button{background:#64748b}
@@ -41,12 +44,13 @@ module = r"""
 <section id="comicLab" aria-labelledby="comicLabTitle">
 <h2 id="comicLabTitle">Комикс-студия</h2>
 <p class="comic-note" style="margin-top:-6px;font-weight:650">Разработчики: Очир Зулаев и Алиса</p>
-<p class="comic-note"><strong>Краткий порядок работы:</strong> 1) введите сюжет и персонажей; 2) нажмите «Создать раскадровку»; 3) нажмите «Сгенерировать изображения кадров»; 4) сохраните проект или экспортируйте готовый комикс. Раскадровка — это пока только текст, серые блоки означают, что рисунков нет. Если генерация не настроена, приложение покажет это и не создаст фиктивные иллюстрации.</p><p class="comic-note">Генерация на телефоне и внешние сервисы пока находятся в расширенных настройках. Модель MNN размером около 1,15 ГБ не скачивается без отдельного подтверждения.</p>
+<p class="comic-note">Всего два шага: <strong>создайте раскадровку → нарисуйте кадры.</strong> Сохранение выполняется отдельно. Серый блок означает, что иллюстрации ещё нет.</p><p class="comic-note">Настройки генерации находятся ниже в разделе «Дополнительно». Скачивание модели на 1,15 ГБ не запускается автоматически.</p>
 <label for="comicStory">Идея или сюжет</label><textarea id="comicStory" rows="4" placeholder="Опишите героев, место действия и события"></textarea>
-<label for="comicCharacterName">Имя нового персонажа</label><input id="comicCharacterName" maxlength="80" placeholder="Например, Лея"><label for="comicCharacterLook">Уникальная внешность и отличительные детали</label><textarea id="comicCharacterLook" rows="2" placeholder="Возраст, лицо, волосы, одежда, телосложение, аксессуары, характерные детали"></textarea><button id="comicAddCharacter" type="button">Добавить персонажа</button><label for="comicCharacters">Карточки персонажей — сохраняйте постоянную внешность между кадрами</label><textarea id="comicCharacters" rows="4" placeholder="Добавьте одного или нескольких персонажей выше. Можно также редактировать карточки вручную."></textarea>
-<div class="comic-row"><div><label for="comicMood">Атмосфера</label><select id="comicMood"><option>Приключение и динамика</option><option>Тёплая и уютная</option><option>Мрачная и напряжённая</option><option>Эпическая и масштабная</option><option>Юмор и лёгкость</option><option>Меланхоличная</option></select></div><div><label for="comicComposition">Композиция кадра</label><select id="comicComposition"><option>Автоматически по сцене</option><option>Кинематографический широкий план</option><option>Портрет и эмоции</option><option>Динамичный ракурс и движение</option><option>Общий план окружения</option></select></div></div>
+<details class="comic-options"><summary>Настроить персонажей и стиль (необязательно)</summary>
+<label for="comicCharacterName">Имя персонажа</label><input id="comicCharacterName" maxlength="80" placeholder="Например, Лея"><label for="comicCharacterLook">Внешность персонажа</label><textarea id="comicCharacterLook" rows="2" placeholder="Лицо, волосы, одежда, телосложение и отличительные детали"></textarea><button id="comicAddCharacter" type="button">Добавить персонажа</button><label for="comicCharacters">Персонажи и их постоянная внешность</label><textarea id="comicCharacters" rows="3" placeholder="Необязательно. Добавьте персонажей, если важно сохранять их внешность между кадрами."></textarea>
+<div class="comic-row"><div><label for="comicMood">Атмосфера</label><select id="comicMood"><option>Приключение и динамика</option><option>Тёплая и уютная</option><option>Мрачная и напряжённая</option><option>Эпическая и масштабная</option><option>Юмор и лёгкость</option><option>Меланхоличная</option></select></div><div><label for="comicComposition">Композиция</label><select id="comicComposition"><option>Автоматически по сцене</option><option>Кинематографический широкий план</option><option>Портрет и эмоции</option><option>Динамичный ракурс и движение</option><option>Общий план окружения</option></select></div></div>
 <div class="comic-row"><div><label for="comicCount">Количество кадров</label><select id="comicCount"><option>3</option><option selected>4</option><option>6</option><option>8</option></select></div>
-<div><label for="comicStyle">Визуальный стиль</label><select id="comicStyle"><option selected>Кинематографический реализм</option><option>Комикс с чёткими контурами</option><option>Графический роман</option><option>Манга</option><option>Аниме</option><option>Акварельное фэнтези</option><option>Карандашный скетч</option><option>Ретро-комикс</option><option>Пиксель-арт</option><option>3D-анимация</option><option>Научная фантастика</option><option>Нуар</option><option>Поп-арт</option><option>Европейский альбомный комикс</option></select></div></div>
+<div><label for="comicStyle">Стиль рисунка</label><select id="comicStyle"><option selected>Кинематографический реализм</option><option>Комикс с чёткими контурами</option><option>Графический роман</option><option>Манга</option><option>Аниме</option><option>Акварельное фэнтези</option><option>Карандашный скетч</option><option>Ретро-комикс</option><option>Пиксель-арт</option><option>3D-анимация</option><option>Научная фантастика</option><option>Нуар</option><option>Поп-арт</option><option>Европейский альбомный комикс</option></select></div></div></details>
 <details><summary style="margin-top:14px;cursor:pointer;font-weight:650">Дополнительно: ИИ-сценарист</summary>
 <p class="comic-note">OpenAI-compatible Chat Completions (например, локальный Ollama /v1/chat/completions). Ответ модели должен содержать JSON-массив с полями title, scene, dialogue. Для локального сервера ключ обычно не нужен.</p>
 <label for="comicEndpoint">Chat-completions endpoint</label><input id="comicEndpoint" type="url" placeholder="https://example.com/v1/chat/completions">
@@ -66,10 +70,10 @@ module = r"""
 <button id="comicCheckLocal" type="button">Проверить подключение</button><button id="comicCheckNative" type="button">Проверить локальный движок Android</button><button id="comicDownloadNativeModel" type="button">Скачать модель на телефон (≈1,15 ГБ)</button><button id="comicGenerateNative" type="button">Сгенерировать первый кадр на телефоне</button><p id="comicNativeModelProgress" class="comic-note" role="status">Локальная модель не скачивается автоматически. Для загрузки требуется свободное место и явное подтверждение.</p><button id="comicBuildWorkflow" type="button">Автособрать workflow по установленной модели</button><button id="comicGenerateLocal" type="button">Сгенерировать кадры локально</button><p class="comic-note">Автосборка использует стандартные узлы ComfyUI и первый установленный checkpoint. Это базовая генерация без IPAdapter; для жёсткого сохранения лица подключите reference-conditioning workflow.</p>
 </details>
 <div class="comic-main-actions" aria-label="Основные действия">
-<button id="comicGenerate" class="comic-primary" type="button">1. Создать историю</button>
+<button id="comicGenerate" class="comic-primary" type="button">1. Создать раскадровку</button>
 <button id="comicGenerateImages" class="comic-primary comic-primary-art" type="button">2. Нарисовать комикс</button>
-<button id="comicSave" class="comic-primary comic-primary-save" type="button">3. Сохранить</button>
 </div>
+<button id="comicSave" class="comic-secondary comic-save-project" type="button">Сохранить проект</button>
 <button id="comicRetryImages" class="comic-secondary" type="button" disabled>Повторить неудачные кадры</button>
 <details class="comic-file-tools"><summary>Открыть проект или экспортировать</summary>
 <button id="comicLoad" type="button">Открыть сохранённый проект</button>
@@ -524,7 +528,7 @@ module = r"""
  });
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
- $("comicGenerateImages").addEventListener("click",()=>generateImages(false));
+ $("comicGenerateImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);generateImages(false);});
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);

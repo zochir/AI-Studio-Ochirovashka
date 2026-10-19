@@ -183,13 +183,15 @@ module = r"""
     let imageUrl="";
      if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
       const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
-      const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}});
+      const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}},120000);
       if(!res.ok)throw Error("Pollinations вернул HTTP "+res.status+" на кадре "+(i+1));
-      const blob=await res.blob(),bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
+      const blob=await res.blob();
+      if(!blob.type||!blob.type.toLowerCase().startsWith("image/")||!blob.size)throw Error("Pollinations не вернул непустое изображение для кадра "+(i+1)+" (Content-Type: "+(blob.type||"не указан")+"). Проверьте ключ, квоту и ответ провайдера.");
+      const bytes=new Uint8Array(await blob.arrayBuffer());let binary="";
       for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
-      imageUrl="data:"+(blob.type||"image/jpeg")+";base64,"+btoa(binary);
+      imageUrl="data:"+blob.type+";base64,"+btoa(binary);
      }else{
-      const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})});
+      const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})},120000);
       if(!res.ok)throw Error("Images API вернул HTTP "+res.status+" на кадре "+(i+1));
       const data=await res.json(),item=data.data&&data.data[0];
       if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));

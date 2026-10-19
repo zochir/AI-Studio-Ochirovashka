@@ -202,6 +202,12 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Ошибка сценария: "+e.message;}
   finally{$("comicGenerate").disabled=false;}
  }
+ function stablePanelSeed(panelIndex){
+  const source=String($("comicStory").value||"")+"|"+String($("comicCharacters").value||"")+"|"+String(panels[panelIndex]&&panels[panelIndex].scene||"")+"|panel:"+panelIndex;
+  let hash=2166136261;
+  for(let i=0;i<source.length;i++){hash^=source.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  return (hash>>>0)%2147483647;
+ }
  async function generateImages(retryOnly=false){
   const endpoint=$("comicImageEndpoint").value.trim(),model=$("comicImageModel").value.trim(),key=$("comicImageKey").value;
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
@@ -218,10 +224,10 @@ module = r"""
      const previousScene=i>0?panels[i-1].scene:"This is the opening scene; establish the setting and character appearances.";
      const nextScene=i<panels.length-1?panels[i+1].scene:"This is the final scene; visually resolve the immediate action.";
      const realismGuide=$("comicStyle").value==="Кинематографический реализм"?"Photorealistic live-action film still, believable human anatomy and facial proportions, natural skin texture with pores and subtle imperfections, physically plausible hair and fabric, realistic weathering on props, grounded materials, natural motivated lighting, cinematic exposure and color grading, realistic depth of field, documentary-level environmental detail, shot on a real cinema camera with a 35mm or 50mm lens, coherent perspective, no plastic skin, no waxy faces, no synthetic 3D-render look, no painterly brush strokes, no collage.":"Respect the selected art style while keeping anatomy, perspective, lighting, materials, expressions and environments physically convincing and highly detailed.";
-     const prompt="Create one polished, high-detail sequential-story panel. Depict a specific moment in the action, not a poster, collage, icon, logo, paint palette, easel, artist tools, or placeholder. "+realismGuide+" No text, letters, subtitles, speech bubbles, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact face, age, body proportions, hairstyle, clothing, colors and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Narrative continuity: previous panel: "+previousScene+". Next panel: "+nextScene+". Keep identities, costume details, props, geography, weather, lighting direction and time of day consistent unless explicitly changed by the story. Show readable physical action and believable body language, natural facial emotion, correct hands and anatomy, detailed foreground/midground/background, purposeful camera framing and no duplicated people or objects. Story moment to depict now: "+panels[i].scene+". Character/dialogue context (convey emotion visually, do not write the dialogue): "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving identity. No captions or lettering.";
+     const prompt="Create one polished, high-detail sequential-story panel. Depict a specific moment in the action, not a poster, collage, icon, logo, paint palette, easel, artist tools, or placeholder. "+realismGuide+" No text, letters, subtitles, speech bubbles, watermark, logo, paint palette, or easel in the image. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Panel "+(i+1)+" of "+panels.length+". Character design bible (preserve exact face, age, body proportions, hairstyle, clothing, colors and distinguishing marks in every panel): "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Narrative continuity: previous panel: "+previousScene+". Next panel: "+nextScene+". Treat the character design bible as immutable model-sheet canon: the same exact individual must recur in every panel, with matching facial structure, eye color, skin tone, age, hairline, hairstyle, body proportions, signature marks, clothing cut and exact color palette. Never redesign, recast, age-shift, beautify, duplicate or substitute the lead character. Keep identities, costume details, props, geography, weather, lighting direction and time of day consistent unless explicitly changed by the story. If the scene changes camera angle, adapt perspective and pose only; do not alter identity or costume. Show readable physical action and believable body language, natural facial emotion, correct hands and anatomy, detailed foreground/midground/background, purposeful camera framing and no duplicated people or objects. Story moment to depict now: "+panels[i].scene+". Character/dialogue context (convey emotion visually, do not write the dialogue): "+panels[i].dialogue+". Vary shot size and camera angle to fit the scene while preserving identity. No captions or lettering. Seed for repeatable rerenders of this exact panel: "+stablePanelSeed(i)+".";
      let imageUrl="";
      if(endpoint.replace(/\/$/,"")==="https://gen.pollinations.ai/image"){
-      const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model);
+      const url=endpoint.replace(/\/$/,"")+"/"+encodeURIComponent(prompt)+"?model="+encodeURIComponent(model)+"&seed="+stablePanelSeed(i);
       const res=await fetchTimed(url,{method:"GET",headers:key?{"Authorization":"Bearer "+key}:{}},120000);
       if(!res.ok)throw await responseError(res,"Pollinations",i+1);
       const blob=await res.blob();
@@ -230,7 +236,7 @@ module = r"""
       for(let j=0;j<bytes.length;j+=0x8000)binary+=String.fromCharCode(...bytes.subarray(j,j+0x8000));
       imageUrl="data:"+blob.type+";base64,"+btoa(binary);
      }else{
-      const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1})},120000);
+      const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1,seed:stablePanelSeed(i)})},120000);
       if(!res.ok)throw await responseError(res,"Images API",i+1);
       const data=await res.json(),item=data.data&&data.data[0];
       if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));

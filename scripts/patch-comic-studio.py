@@ -564,7 +564,7 @@ if manifest.is_file():
     source = manifest.read_text(encoding="utf-8")
     permission = '<uses-permission android:name="android.permission.INTERNET" />'
     if permission not in source:
-        source = re.sub(r'(<manifest\\b[^>]*>)', lambda m: m.group(1) + "\\n    " + permission, source, count=1)
+        source = re.sub(r'(<manifest\b[^>]*>)', lambda m: m.group(1) + "\n    " + permission, source, count=1)
         manifest.write_text(source, encoding="utf-8")
 
 print("Comic Studio updated: storyboard, optional text/image APIs, native MNN model download, status and image generation bridge, portable project import/export and SVG/PNG export.")

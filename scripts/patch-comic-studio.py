@@ -326,7 +326,7 @@ module = r"""
   return '<text x="'+x+'" y="'+y+'" '+(attributes||'')+'>'+lines.map((line,i)=>'<tspan x="'+x+'" dy="'+(i===0?0:lineHeight)+'">'+escSvg(line)+'</tspan>').join("")+'</text>';
  }
  function escSvg(value){return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");}
- async async function exportHtml(){
+ async function exportHtml(){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const button=$("comicExportHtml");button.disabled=true;
   $("comicStatus").textContent="Создаю автономный HTML-комикс: встраиваю изображения…";
@@ -356,7 +356,7 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Не удалось экспортировать HTML-комикс: "+e.message;}
   finally{button.disabled=false;}
  }
- function exportSvg(format){
+ async function exportSvg(format){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
   const escXml=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const imageData=async src=>{

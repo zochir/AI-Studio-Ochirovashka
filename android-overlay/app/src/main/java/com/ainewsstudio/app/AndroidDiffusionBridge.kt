@@ -44,6 +44,10 @@ class AndroidDiffusionBridge(
         val id = callbackId.toIntOrNull() ?: return
         executor.execute {
             try {
+                // Do not let unsupported ABIs download a multi-gigabyte model they cannot run.
+                if (!nativeAvailable) {
+                    throw IllegalStateException("Локальный движок недоступен для ABI этого устройства; загрузка модели отменена.")
+                }
                 ensureBundledTokenizer()
                 val manifest = fetchManifest()
                 val absent = MODEL_FILES.filterNot { manifest.containsKey(it) }

@@ -47,6 +47,9 @@ jobs:
           set -euo pipefail
           if [[ -d android-overlay ]]; then cp -a android-overlay/. "$PROJECT_DIR"/; echo "Applied tracked Android source overlay."; else echo "No Android source overlay files to apply."; fi
 
+      - name: Wire on-device diffusion readiness bridge
+        run: python3 scripts/patch-native-diffusion-bridge.py "$PROJECT_DIR"
+
       - name: Inventory Android native integration points
         shell: bash
         run: |

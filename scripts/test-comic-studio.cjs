@@ -39,6 +39,7 @@ const blobs = [];
 const saved = new Map();
 let failingImageRequests = 0;
 let localPromptRequests = 0;
+let localLastRequest = null;
 let localFailNextPrompt = false;
 const document = {
   getElementById: id => els[id] || (els[id] = new Element(id)),
@@ -95,6 +96,7 @@ const context = {
     }
     if (url === 'http://comfy.test:8188/prompt') {
       localPromptRequests++;
+      localLastRequest = request;
       assert.match(JSON.stringify(request), /AI scene|First scene|Second scene/);
       if (localFailNextPrompt) { localFailNextPrompt = false; return { ok: false, status: 503, text: async () => 'temporary local overload' }; }
       return { ok: true, json: async () => ({ prompt_id: 'local-job-1' }) };
@@ -237,7 +239,7 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   assert.equal(els.comicRetryImages.disabled, true, 'retry button should disable when no failed frames remain');
   // ComfyUI retries must use the local provider and only requeue failed local frames.
   els.comicLocalEndpoint.value = 'http://comfy.test:8188';
-  els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__"}}}';
+  els.comicWorkflow.value = '{"1":{"inputs":{"text":"__PROMPT__","seed":"__SEED__"}}}';
   const beforeLocalQueue = localPromptRequests;
   localFailNextPrompt = true;
   await els.comicGenerateLocal.click();
@@ -248,6 +250,8 @@ vm.runInNewContext(html.slice(start + 8, end), context, { timeout: 2000 });
   await els.comicRetryImages.click();
   assert.equal(localPromptRequests, beforeLocalRetry + 1, 'local retry should request only the failed frame');
   assert.match(els.comicStatus.textContent, /Повтор локальных кадров завершён/);
+  assert.equal(typeof localLastRequest.prompt["1"].inputs.seed, "number", "ComfyUI __SEED__ marker must become a numeric sampler seed");
+  assert.notEqual(localLastRequest.prompt["1"].inputs.seed, "__SEED__");
   assert.equal(els.comicRetryImages.disabled, true, 'local retry button should disable when failures are cleared');
   els.comicAddCharacter.click();
   assert.match(els.comicStatus.textContent, /укажите имя и описание внешности/);

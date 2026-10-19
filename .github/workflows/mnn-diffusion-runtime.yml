@@ -56,6 +56,7 @@ jobs:
             -DMNN_BUILD_DIFFUSION=ON \
             -DMNN_BUILD_LLM=ON \
             -DMNN_OPENCL=ON \
+            -DMNN_SUPPORT_TRANSFORMER_FUSE=ON \
             -DMNN_IMGCODECS=ON \
             -DMNN_BUILD_TEST=OFF \
             -DMNN_BUILD_BENCHMARK=OFF \

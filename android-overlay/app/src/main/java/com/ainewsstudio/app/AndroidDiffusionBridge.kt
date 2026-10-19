@@ -133,7 +133,7 @@ class AndroidDiffusionBridge(
                 val name = item.optString("path")
                 if (name !in MODEL_FILES) continue
                 val lfs = item.optJSONObject("lfs")
-                val oid = if (lfs != null) lfs.optString("oid").removePrefix("sha256:") else item.optString("oid")
+                val oid = if (lfs != null) lfs.optString("sha256").removePrefix("sha256:") else item.optString("oid")
                 val size = if (lfs != null) lfs.optLong("size", -1L) else item.optLong("size", -1L)
                 if (oid.isNotBlank() && size > 0) result[name] = ModelFile(size, oid, lfs != null)
             }

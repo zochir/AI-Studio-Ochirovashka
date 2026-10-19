@@ -85,3 +85,11 @@ Android-приложение, которое превращает сюжет в 
 - Официальный Android JNI-код сессии: https://github.com/alibaba/MNN/blob/master/apps/Android/MnnLlmChat/app/src/main/cpp/diffusion_jni.cpp
 - Официальная Kotlin-обёртка: https://github.com/alibaba/MNN/blob/master/apps/Android/MnnLlmChat/app/src/main/java/com/alibaba/mnnllm/android/llm/DiffusionSession.kt
 - Пакет конвертированной модели (проверить совместимость и лицензию до выпуска): https://huggingface.co/taobao-mnn/stable-diffusion-v1-5-mnn-opencl/tree/main
+
+## Результат проверки официального Android-бинарника MNN — 2026-10-19
+
+GitHub Actions run `39304030368` завершился успешно, APK собран и опубликован как artifact `AI-Studio-Ochirovashka-APK` (838 091 байт; SHA-256 артефакта по GitHub: `922b668c70fceaa26f1fce97eed8f79ba4bd0b9dfc308b9a7d7e0590642012c7`). Проверка реального inference не выполнялась.
+
+Проверен официальный архив MNN 3.6.1 для Android (armeabi-v7a и arm64-v8a). В обеих `libMNN.so` отсутствует экспортируемый символ `Diffusion::createDiffusion`. Следовательно, этот готовый runtime нельзя напрямую связать с JNI-мостом Stable Diffusion; добавлять его в APK как будто он уже умеет генерировать изображения было бы ошибкой. Шаг CI намеренно завершился предупреждением, а не ошибкой сборки.
+
+Следующий допустимый путь: собирать MNN из официальных исходников с включённым Diffusion для Android и проверить наличие нужного API в полученной библиотеке; только после этого связывать JNI-мост, модель и WebView. Перед интеграцией также нужно согласовать модельный токенизатор: актуальный runtime требует `tokenizer.mtok`, тогда как найденный пакет SD1.5 содержит `vocab.json`, `merges.txt` и `alphas.txt`. Загрузку модели размером около 1,15 GB нельзя запускать автоматически — пользователь должен явно инициировать её внутри приложения. Совместимость и производительность на POCO X6 5G остаются неподтверждёнными до настоящего теста на устройстве.

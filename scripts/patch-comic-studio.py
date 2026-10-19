@@ -242,8 +242,16 @@ module = r"""
       const res=await fetchTimed(endpoint,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},key?{"Authorization":"Bearer "+key}:{}),body:JSON.stringify({model:model,prompt:prompt,size:"1024x1024",n:1,seed:stablePanelSeed(i)})},120000);
       if(!res.ok)throw await responseError(res,"Images API",i+1);
       const data=await res.json(),item=data.data&&data.data[0];
-      if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1));
-      imageUrl=item.url||(item.b64_json?"data:image/png;base64,"+item.b64_json:"");
+      if(!item)throw Error("Images API не вернул data[0] для кадра "+(i+1)+". Проверьте формат ответа провайдера.");
+      if(item.b64_json){
+       if(typeof item.b64_json!=="string"||!item.b64_json.length||!/^[A-Za-z0-9+/]+={0,2}$/.test(item.b64_json))throw Error("Images API вернул некорректные base64-данные для кадра "+(i+1)+".");
+       imageUrl="data:image/png;base64,"+item.b64_json;
+      }else if(item.url){
+       if(typeof item.url!=="string"||!(/^(https?:\\/\\/|data:image\\/)/i).test(item.url))throw Error("Images API вернул неподдерживаемый адрес изображения для кадра "+(i+1)+". Ожидается HTTP(S)-URL или data:image.");
+       imageUrl=item.url;
+      }else{
+       throw Error("Images API не вернул ни url, ни b64_json для кадра "+(i+1)+".");
+      }
      }
      if(!imageUrl)throw Error("Ответ кадра "+(i+1)+" не содержит изображения.");
      panels[i].imageUrl=imageUrl;failedImageFrames.delete(i);completed++;render(panels);

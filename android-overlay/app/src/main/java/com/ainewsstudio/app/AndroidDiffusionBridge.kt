@@ -110,9 +110,10 @@ class AndroidDiffusionBridge(
                     } else {
                         val output = File(appContext.cacheDir, "comic-${System.currentTimeMillis()}.png")
                         val ok = nativeGenerate(nativeHandle, prompt, output.absolutePath, 10, 42)
-                        if (!ok || !output.isFile || output.length() < 128) {
+                        if (!ok || !isValidPng(output)) {
+                            output.delete()
                             "window.nativeComicImageResult(" + callbackId.toIntOrNull() + ",null," +
-                                org.json.JSONObject.quote("Локальная генерация завершилась без корректного PNG.") + ");"
+                                org.json.JSONObject.quote("Локальная генерация не создала корректный PNG (проверены сигнатура и размеры).") + ");"
                         } else {
                             val encoded = Base64.encodeToString(output.readBytes(), Base64.NO_WRAP)
                             output.delete()
@@ -126,6 +127,32 @@ class AndroidDiffusionBridge(
             }
             webView.post { webView.evaluateJavascript(result, null) }
         }
+    }
+
+    private fun isValidPng(file: File): Boolean {
+        if (!file.isFile || file.length() < 33L) return false
+        val header = ByteArray(24)
+        try {
+            file.inputStream().use { input ->
+                var offset = 0
+                while (offset < header.size) {
+                    val count = input.read(header, offset, header.size - offset)
+                    if (count <= 0) return false
+                    offset += count
+                }
+            }
+        } catch (_: Exception) {
+            return false
+        }
+        val signature = byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4e.toByte(), 0x47.toByte(), 0x0d.toByte(), 0x0a.toByte(), 0x1a.toByte(), 0x0a.toByte())
+        if (!header.copyOfRange(0, 8).contentEquals(signature)) return false
+        if (String(header, 12, 4, Charsets.US_ASCII) != "IHDR") return false
+        fun uint32(offset: Int): Long =
+            ((header[offset].toLong() and 0xff) shl 24) or
+            ((header[offset + 1].toLong() and 0xff) shl 16) or
+            ((header[offset + 2].toLong() and 0xff) shl 8) or
+            (header[offset + 3].toLong() and 0xff)
+        return uint32(16) > 0L && uint32(20) > 0L
     }
 
     private data class ModelFile(val size: Long, val oid: String, val lfs: Boolean)

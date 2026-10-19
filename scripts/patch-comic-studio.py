@@ -317,6 +317,44 @@ module = r"""
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
+ async function generateNativeImages(){
+  if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  const bridge=nativeRoot.AndroidDiffusion;
+  if(!bridge||typeof bridge.generate!=="function"||typeof bridge.status!=="function"){
+   $("comicStatus").textContent="Локальный генератор недоступен в этой сборке. Настройте ComfyUI или внешний генератор в разделе «Дополнительно».";return;
+  }
+  let state="";
+  try{state=bridge.status();}catch(e){$("comicStatus").textContent="Не удалось проверить локальную модель: "+e.message;return;}
+  if(state!=="MODEL_PRESENT"){
+   $("comicStatus").textContent="Локальная модель на телефоне не установлена. Ничего не скачано. Откройте «Дополнительно: генерация на телефоне / ComfyUI», чтобы выбрать способ генерации. Статус: "+state;return;
+  }
+  $("comicGenerateImages").disabled=true;
+  let completed=0;const failures=[];
+  try{
+   for(let i=0;i<panels.length;i++){
+    $("comicStatus").textContent="Рисую на телефоне кадр "+(i+1)+" из "+panels.length+"…";
+    const prompt="Create one sequential comic panel. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Character design bible: "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Preserve the same face, age, hairstyle, body proportions, clothing, colors and distinguishing marks. Current scene: "+panels[i].scene+". Dialogue context (show emotion only, no written text): "+panels[i].dialogue+". Story context: "+$("comicStory").value+". Detailed, cinematic, coherent anatomy and lighting, no text, no letters, no watermark.";
+    try{
+     const data=await new Promise((resolve,reject)=>{
+      const id=++nativeImageRequest;let settled=false;
+      const finish=(err,value)=>{if(settled)return;settled=true;clearTimeout(timer);if(err)reject(err);else resolve(value);};
+      const timer=setTimeout(()=>{nativeImageRequest++;finish(Error("Истекло ожидание локального движка (6 минут)."));},360000);
+      nativeRoot.nativeComicImageResult=function(callbackId,imageData,error){
+       if(Number(callbackId)!==id)return;
+       if(error)return finish(Error(error));
+       if(!imageData||!String(imageData).startsWith("data:image/png;base64,"))return finish(Error("Движок не вернул корректный PNG."));
+       finish(null,String(imageData));
+      };
+      try{bridge.generate(prompt,String(id));}catch(e){finish(Error(e&&e.message?e.message:String(e)));}
+     });
+     panels[i].imageUrl=data;failedImageFrames.delete(i);completed++;render(panels);
+     try{localStorage.setItem(PROJECT_KEY,JSON.stringify({version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,panels:panels}));}catch(_){}
+    }catch(e){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+e.message);}
+   }
+   $("comicRetryImages").disabled=failedImageFrames.size===0;
+   $("comicStatus").textContent=failures.length?"Локально создано "+completed+" из "+panels.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":"Готово: на телефоне созданы все "+completed+" кадра.";
+  }finally{$("comicGenerateImages").disabled=false;}
+ }
  async function buildBasicComfyWorkflow(){
   const base=$("comicLocalEndpoint").value.trim().replace(/\/$/,"");
   if(!base){$("comicStatus").textContent="Сначала укажите адрес ComfyUI.";return;}
@@ -528,7 +566,7 @@ module = r"""
  });
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
- $("comicGenerateImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);generateImages(false);});
+ $("comicGenerateImages").addEventListener("click",()=>{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function"&&nativeRoot.AndroidDiffusion.status()==="MODEL_PRESENT")return generateNativeImages();if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);generateImages(false);});
  $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);

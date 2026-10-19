@@ -19,19 +19,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
-      - name: Inspect latest APK build without starting another build
+      - name: Inspect latest APK build and its artifacts without starting another build
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
+          headers=(-H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GH_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28")
           api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/mobile-apk-build.yml/runs?per_page=5"
-          response="$(curl --fail --silent --show-error \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${api}")"
+          response="$(curl --fail --silent --show-error "${headers[@]}" "${api}")"
           python3 -c '
           import json, sys
           data = json.load(sys.stdin)
@@ -44,10 +41,32 @@ jobs:
                   id=run.get("id"), status=run.get("status"), conclusion=run.get("conclusion"),
                   event=run.get("event"), created_at=run.get("created_at"), url=run.get("html_url")))
           latest = runs[0]
-          if latest.get("status") in ("queued", "in_progress"):
-              print("WARN: latest build is still active; watchdog will not cancel or duplicate it.")
-          elif latest.get("conclusion") != "success":
-              print("WARN: latest completed build is not successful; inspect its logs before a targeted retry.")
+          print("LATEST_RUN_ID=" + str(latest.get("id")))
+          print("LATEST_STATUS=" + str(latest.get("status")))
+          print("LATEST_CONCLUSION=" + str(latest.get("conclusion")))
+          ' <<< "${response}" > /tmp/latest-build.txt
+          cat /tmp/latest-build.txt
+          run_id="$(sed -n 's/^LATEST_RUN_ID=//p' /tmp/latest-build.txt)"
+          status="$(sed -n 's/^LATEST_STATUS=//p' /tmp/latest-build.txt)"
+          conclusion="$(sed -n 's/^LATEST_CONCLUSION=//p' /tmp/latest-build.txt)"
+          if [[ "${status}" == "completed" && "${conclusion}" == "success" ]]; then
+            artifacts_url="https://api.github.com/repos/${REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100"
+            artifacts="$(curl --fail --silent --show-error "${headers[@]}" "${artifacts_url}")"
+            python3 -c '
+          import json, sys
+          data=json.load(sys.stdin)
+          artifacts=data.get("artifacts", [])
+          for a in artifacts:
+              print("artifact name={name} expired={expired} size_bytes={size} url={url}".format(
+                  name=a.get("name"), expired=a.get("expired"), size=a.get("size_in_bytes"), url=a.get("archive_download_url")))
+          apk=[a for a in artifacts if a.get("name") == "AI-Studio-Ochirovashka-APK" and not a.get("expired")]
+          if apk:
+              print("PASS: successful build has a non-expired APK artifact.")
           else:
-              print("PASS: latest APK build completed successfully.")
-          ' <<< "${response}"
+              print("WARN: successful build has no available AI-Studio-Ochirovashka-APK artifact.")
+          ' <<< "${artifacts}"
+          elif [[ "${status}" == "queued" || "${status}" == "in_progress" ]]; then
+            echo "WARN: latest build is active; watchdog will not cancel or duplicate it."
+          else
+            echo "WARN: latest build is not successful; inspect its logs before a targeted retry."
+          fi

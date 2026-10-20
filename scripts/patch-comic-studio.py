@@ -104,7 +104,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
   if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
+  panels[0].imageUrl=String(data);render(panels);const persisted=saveProject();$("comicStatus").textContent=persisted?"Первый кадр создан локально на телефоне и сохранён в проекте.":"Первый кадр создан, но автосохранение не удалось. Экспортируйте проект в JSON перед закрытием приложения.";
  };
  nativeRoot.nativeComicModelProgress=function(id,percent,message,done){
   if(Number(id)!==nativeModelRequest)return;
@@ -152,7 +152,8 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    const data={version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,characterReferenceDataUrl:characterReferenceDataUrl,panels:panels};
    localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
    $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
-  }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
+   return true;
+  }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте проект в JSON отдельно.";return false;}
  }
  function loadProject(){
   try{
@@ -351,7 +352,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    $("comicStatus").textContent="Локальная модель на телефоне не установлена. Ничего не скачано. Откройте «Дополнительно: генерация на телефоне / ComfyUI», чтобы выбрать способ генерации. Статус: "+state;return;
   }
   $("comicGenerateImages").disabled=true;
-  let completed=0;const failures=[];
+  let completed=0;const failures=[];let persistenceFailures=0;
   try{
    for(const i of indices){
     $("comicStatus").textContent=(retryOnly?"Повторная генерация на телефоне кадра ":"Рисую на телефоне кадр ")+(i+1)+" из "+panels.length+"…";
@@ -378,11 +379,11 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
       try{bridge.generate(prompt,String(id));}catch(e){finish(Error(e&&e.message?e.message:String(e)));}
      });
      panels[i].imageUrl=data;failedImageFrames.delete(i);completed++;render(panels);
-     saveProject();
+     if(!saveProject())persistenceFailures++;
     }catch(e){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+e.message);}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;
-   $("comicStatus").textContent=failures.length?(retryOnly?"Повтор завершён: дополнительно создано ":"Локально создано ")+completed+" из "+indices.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":(retryOnly?"Повтор завершён: успешно обработано ":"Готово: на телефоне созданы ")+completed+(retryOnly?" из "+indices.length+" повторяемых кадров.":" кадра.");
+   $("comicStatus").textContent=(failures.length?(retryOnly?"Повтор завершён: дополнительно создано ":"Локально создано ")+completed+" из "+indices.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":(retryOnly?"Повтор завершён: успешно обработано ":"Готово: на телефоне созданы ")+completed+(retryOnly?" из "+indices.length+" повторяемых кадров.":" кадра."))+(persistenceFailures?" Автосохранение не удалось для "+persistenceFailures+" кадр(ов); экспортируйте проект в JSON перед закрытием приложения.":"");
   }finally{$("comicGenerateImages").disabled=false;}
  }
  async function buildBasicComfyWorkflow(){
@@ -630,7 +631,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
    if(!data||!String(data).startsWith("data:image/png;base64,")){$("comicStatus").textContent="Движок не вернул корректный PNG.";return;}
    if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-   panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
+   panels[0].imageUrl=String(data);render(panels);const persisted=saveProject();$("comicStatus").textContent=persisted?"Первый кадр создан локально на телефоне и сохранён в проекте.":"Первый кадр создан, но автосохранение не удалось. Экспортируйте проект в JSON перед закрытием приложения.";
   };
   // Native inference can stall on unsupported model/runtime combinations. Restore the UI
   // after six minutes and invalidate late callbacks; this does not claim to cancel JNI work.

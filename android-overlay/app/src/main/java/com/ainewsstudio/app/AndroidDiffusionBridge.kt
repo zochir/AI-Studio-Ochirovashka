@@ -109,7 +109,9 @@ class AndroidDiffusionBridge(
                             org.json.JSONObject.quote("MNN не смог загрузить модель. Формат/токенизатор могут быть несовместимы.") + ");"
                     } else {
                         val output = File(appContext.cacheDir, "comic-${System.currentTimeMillis()}.png")
-                        val ok = nativeGenerate(nativeHandle, prompt, output.absolutePath, 10, 42)
+                        val stableSeed = prompt.hashCode() and Int.MAX_VALUE
+                        // 16 steps balances SD 1.5 detail and phone latency; the prompt-derived seed makes retries reproducible while panels differ.
+                        val ok = nativeGenerate(nativeHandle, prompt, output.absolutePath, 16, stableSeed)
                         if (!ok || !isValidPng(output)) {
                             output.delete()
                             "window.nativeComicImageResult(" + callbackId.toIntOrNull() + ",null," +

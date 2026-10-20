@@ -16,6 +16,9 @@ assert.match(comicSource, /data-panel-field="title"/, 'each panel must expose an
 assert.match(comicSource, /data-panel-field="scene"/, 'each panel must expose an editable scene description');
 assert.match(comicSource, /data-panel-field="dialogue"/, 'each panel must expose an editable dialogue field');
 assert.match(comicSource, /panels\[i\]\[field\]=input\.value/, 'panel edits must update the project data model');
+assert.match(comicSource, /async function generateNativeImages\(retryOnly=false\)/, 'native generation must support retry-only mode');
+assert.match(comicSource, /if\(nativeStatus==="MODEL_PRESENT"\)return generateNativeImages\(true\)/, 'retry button must route failed frames to the native generator when the local model is installed');
+assert.match(comicSource, /const indices=retryOnly\?Array\.from\(failedImageFrames\)/, 'native retry must process only failed frames');
 
 class Element {
   constructor(id) {

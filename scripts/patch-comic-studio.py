@@ -42,6 +42,41 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
 #comicLab .comic-panel{border:2px solid #172033;border-radius:8px;background:#fff;color:#172033;overflow:hidden;box-shadow:3px 4px 0 #172033}
 #comicLab .comic-art{width:100%;aspect-ratio:1/1;display:grid;place-items:center;background:#e2e8f0;color:#334155;font-size:15px;text-align:center;padding:18px;object-fit:cover}#comicLab .comic-art-placeholder{font-weight:650;line-height:1.5}
 #comicLab .comic-panel h3,#comicLab .comic-panel p{margin:10px;line-height:1.4}
+
+/* Visual refinement: polished, mobile-first studio without changing controls or behavior. */
+#comicLab{max-width:920px;margin:12px auto;padding:clamp(16px,4vw,30px);border:1px solid #d8dff0;border-radius:24px;background:linear-gradient(160deg,#ffffff 0%,#f8faff 58%,#f2f5ff 100%);color:#17213b;box-shadow:0 18px 50px rgba(30,41,89,.12)}
+#comicLab h2{font-size:clamp(1.65rem,5vw,2.25rem);line-height:1.12;letter-spacing:-.035em;margin:0 0 14px;color:#18234a}
+#comicLab h2:before{content:"✦";display:inline-grid;place-items:center;width:42px;height:42px;margin-right:10px;border-radius:14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-size:1.1rem;vertical-align:middle;box-shadow:0 5px 14px rgba(79,70,229,.25)}
+#comicLab .comic-note{color:#596783;font-size:.93rem;line-height:1.55}
+#comicLab p.comic-note strong{color:#29365f}
+#comicLab label{margin:14px 0 7px;color:#293653;font-size:.94rem}
+#comicLab textarea,#comicLab input,#comicLab select{border:1px solid #d2d9e9;border-radius:13px;background:#fff;color:#1c2742;padding:12px 14px;box-shadow:0 1px 2px rgba(20,32,68,.03);transition:border-color .16s ease,box-shadow .16s ease}
+#comicLab textarea{resize:vertical;line-height:1.5}
+#comicLab textarea:focus,#comicLab input:focus,#comicLab select:focus{outline:none;border-color:#7067ed;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+#comicLab details{border:1px solid #e0e5f1;border-radius:16px;background:rgba(248,250,255,.9);padding:14px 16px;margin:14px 0}
+#comicLab details[open]{border-color:#cbd2fb;background:#fff;box-shadow:0 5px 18px rgba(37,48,97,.05)}
+#comicLab details summary{color:#35436b;font-weight:700;padding:5px 0}
+#comicLab details summary::marker{color:#6558df}
+#comicLab button{border-radius:13px;background:#34415f;box-shadow:0 2px 4px rgba(18,28,59,.08);transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}
+#comicLab button:hover:not(:disabled){filter:brightness(1.07);box-shadow:0 5px 13px rgba(35,47,93,.15)}
+#comicLab button:active:not(:disabled){transform:translateY(1px)}
+#comicLab button:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+#comicLab .comic-main-actions{gap:10px}
+#comicLab .comic-main-actions button{min-height:58px;border-radius:15px;padding:15px 18px;box-shadow:0 4px 10px rgba(30,41,89,.09)}
+#comicLab .comic-main-actions .comic-primary{background:linear-gradient(120deg,#5145d9,#6d4ce6)}
+#comicLab .comic-main-actions .comic-primary-art{background:linear-gradient(120deg,#087f75,#11998e)}
+#comicLab .comic-main-actions .comic-primary-save{background:linear-gradient(120deg,#33415f,#485777)}
+#comicLab #comicGenerateImages{border-radius:15px;background:linear-gradient(120deg,#0b8277,#0d9488);box-shadow:0 7px 18px rgba(13,148,136,.2)}
+#comicLab .comic-grid{gap:14px}
+#comicLab .comic-panel{border:1px solid #dbe1ef;border-radius:16px;box-shadow:0 8px 22px rgba(30,41,89,.08);transition:transform .16s ease,box-shadow .16s ease}
+#comicLab .comic-panel:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(30,41,89,.12)}
+#comicLab .comic-art{background:linear-gradient(145deg,#eef1fb,#e4e9f8);color:#596783;aspect-ratio:4/3}
+#comicLab .comic-art-placeholder{max-width:240px}
+#comicLab .comic-panel h3{color:#1e2a4b;font-size:1.04rem}
+#comicLab .comic-panel p{color:#586680}
+#comicLab .comic-row{gap:14px}
+@media(max-width:480px){#comicLab{margin:8px;padding:16px;border-radius:18px}#comicLab h2:before{width:36px;height:36px;border-radius:12px;margin-right:8px}#comicLab .comic-main-actions button{min-height:56px}#comicLab details{padding:12px}}
+@media(prefers-reduced-motion:reduce){#comicLab *,#comicLab *:before,#comicLab *:after{transition:none!important;scroll-behavior:auto!important}}
 </style>
 <section id="comicLab" aria-labelledby="comicLabTitle">
 <h2 id="comicLabTitle">Комикс-студия</h2>

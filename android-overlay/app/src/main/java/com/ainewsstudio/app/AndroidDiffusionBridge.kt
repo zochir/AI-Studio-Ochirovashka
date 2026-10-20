@@ -229,7 +229,7 @@ class AndroidDiffusionBridge(
             }
 
             val digest = MessageDigest.getInstance(if (meta.lfs) "SHA-256" else "SHA-1")
-            if (!meta.lfs) digest.update("blob ${meta.size}\\u0000".toByteArray(Charsets.UTF_8))
+            if (!meta.lfs) digest.update("blob ${meta.size}\u0000".toByteArray(Charsets.UTF_8))
             if (append) {
                 part.inputStream().buffered().use { input ->
                     val hashBuffer = ByteArray(256 * 1024)

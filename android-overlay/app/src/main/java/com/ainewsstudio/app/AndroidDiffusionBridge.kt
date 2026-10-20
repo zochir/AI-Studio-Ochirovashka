@@ -8,6 +8,7 @@ import android.webkit.WebView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -244,7 +245,7 @@ class AndroidDiffusionBridge(
             var received = offset
             var lastNotice = offset
             connection.inputStream.use { input ->
-                part.outputStream().buffered().use { output ->
+                FileOutputStream(part, append).buffered().use { output ->
                     val buffer = ByteArray(256 * 1024)
                     while (true) {
                         val n = input.read(buffer)

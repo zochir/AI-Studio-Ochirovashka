@@ -9,13 +9,28 @@ const start = html.lastIndexOf('<script>');
 const end = html.indexOf('</script>', start);
 assert(start >= 0 && end > start, 'Comic Studio inline script must exist');
 const comicSource = html.slice(start + 8, end);
-const nativeAutosaveSnippet = 'panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";';
-assert.equal(comicSource.split(nativeAutosaveSnippet).length - 1, 2, 'both standalone native first-frame success handlers must save the project');
+const nativeAutosaveSnippet = 'panels[0].imageUrl=String(data);render(panels);const persisted=saveProject();$("comicStatus").textContent=persisted?"Первый кадр создан локально на телефоне и сохранён в проекте.":"Первый кадр создан, но автосохранение не удалось. Экспортируйте проект в JSON перед закрытием приложения.";';
+assert.equal(comicSource.split(nativeAutosaveSnippet).length - 1, 2, 'both standalone native first-frame handlers must distinguish saved from unsaved images');
+assert.match(comicSource, /return true;\s*\}catch\(e\).*return false;/, 'saveProject must report whether persistence actually succeeded');
+assert.match(comicSource, /let completed=0;const failures=\[\];let persistenceFailures=0;/, 'native generation must track project-save failures separately from image failures');
+assert.match(comicSource, /if\(!saveProject\(\)\)persistenceFailures\+\+/, 'native generation must detect localStorage quota or persistence errors');
+assert.match(comicSource, /Автосохранение не удалось для /, 'final status must warn when images were generated but not persisted');
 assert.equal(comicSource.includes('panels[0].imageUrl=String(data);render(panels);$("comicStatus").textContent="Первый кадр создан локально на телефоне."'), false, 'native first-frame success must not report success before autosaving');
 assert.match(comicSource, /data-panel-field="title"/, 'each panel must expose an editable title');
 assert.match(comicSource, /data-panel-field="scene"/, 'each panel must expose an editable scene description');
 assert.match(comicSource, /data-panel-field="dialogue"/, 'each panel must expose an editable dialogue field');
 assert.match(comicSource, /panels\[i\]\[field\]=input\.value/, 'panel edits must update the project data model');
+assert.match(comicSource, /async function generateNativeImages\(retryOnly=false\)/, 'native generation must support retry-only mode');
+assert.match(comicSource, /if\(nativeStatus==="MODEL_PRESENT"\)return generateNativeImages\(true\)/, 'retry button must route failed frames to the native generator when the local model is installed');
+assert.match(comicSource, /const indices=retryOnly\?Array\.from\(failedImageFrames\)/, 'native retry must process only failed frames');
+assert.match(comicSource, /Photorealistic cinematic still/, 'native prompts must request realistic materials, faces and cinematic lighting');
+assert.match(comicSource, /const prompt="Current scene: "\+panels\[i\]\.scene\+"\. Immutable character design bible:/, 'the current scene and character canon must appear first to survive SD 1.5 CLIP context truncation');
+assert.match(comicSource, /short context window: put the actual scene and character canon first/, 'the prompt builder must document why critical subject details are ordered first');
+assert.match(comicSource, /Camera direction: /, 'native panels must vary camera language to avoid repetitive compositions');
+assert.match(comicSource, /Previous panel: /, 'native prompts must include preceding-scene continuity');
+assert.match(comicSource, /Next panel: /, 'native prompts must include next-scene continuity');
+assert.match(comicSource, /Immutable character design bible/, 'native prompts must enforce consistent character identity');
+
 
 class Element {
   constructor(id) {

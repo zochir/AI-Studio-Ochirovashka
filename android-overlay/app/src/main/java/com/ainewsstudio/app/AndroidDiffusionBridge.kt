@@ -8,6 +8,7 @@ import android.webkit.WebView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -78,7 +79,6 @@ class AndroidDiffusionBridge(
                     }
                     target.delete()
                     val part = File(modelDir, "$name.part")
-                    part.delete()
                     downloadOne(name, part, meta, id, completed, total)
                     if (!part.renameTo(target)) throw IllegalStateException("Не удалось сохранить $name")
                     completed += meta.size
@@ -109,7 +109,9 @@ class AndroidDiffusionBridge(
                             org.json.JSONObject.quote("MNN не смог загрузить модель. Формат/токенизатор могут быть несовместимы.") + ");"
                     } else {
                         val output = File(appContext.cacheDir, "comic-${System.currentTimeMillis()}.png")
-                        val ok = nativeGenerate(nativeHandle, prompt, output.absolutePath, 10, 42)
+                        val stableSeed = prompt.hashCode() and Int.MAX_VALUE
+                        // 16 steps balances SD 1.5 detail and phone latency; the prompt-derived seed makes retries reproducible while panels differ.
+                        val ok = nativeGenerate(nativeHandle, prompt, output.absolutePath, 16, stableSeed)
                         if (!ok || !isValidPng(output)) {
                             output.delete()
                             "window.nativeComicImageResult(" + callbackId.toIntOrNull() + ",null," +
@@ -191,40 +193,94 @@ class AndroidDiffusionBridge(
     }
 
     private fun downloadOne(name: String, part: File, meta: ModelFile, id: Int, before: Long, total: Long) {
-        val url = URL("https://huggingface.co/$MODEL_REPO/resolve/$MODEL_REVISION/$name?download=true")
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30000; readTimeout = 90000
+        // Keep a partial file after network interruption and resume with HTTP Range.
+        // The final digest is still checked against the pinned Hub manifest.
+        var offset = if (part.isFile) part.length() else 0L
+        if (offset >= meta.size) {
+            part.delete()
+            offset = 0L
+        }
+        val connection = (URL("https://huggingface.co/$MODEL_REPO/resolve/$MODEL_REVISION/$name?download=true")
+            .openConnection() as HttpURLConnection).apply {
+            connectTimeout = 30000
+            readTimeout = 90000
             setRequestProperty("User-Agent", "AI-Comic-Studio-Android")
             instanceFollowRedirects = true
+            if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
         }
         try {
-            if (connection.responseCode !in 200..299) throw IllegalStateException("Не удалось скачать $name (HTTP ${connection.responseCode})")
+            val response = connection.responseCode
+            if (response !in 200..299) {
+                throw IllegalStateException("Не удалось скачать $name (HTTP $response)")
+            }
+            val append = if (offset > 0L && response == HttpURLConnection.HTTP_PARTIAL) {
+                val range = connection.getHeaderField("Content-Range") ?: ""
+                if (!range.startsWith("bytes $offset-")) {
+                    throw IllegalStateException("Сервер вернул неверный диапазон для продолжения $name: $range")
+                }
+                true
+            } else {
+                // Some mirrors ignore Range and return the full file with HTTP 200.
+                // In that case restart this one file rather than corrupting the model.
+                if (response == HttpURLConnection.HTTP_PARTIAL) {
+                    throw IllegalStateException("Неожиданный частичный ответ для $name")
+                }
+                offset = 0L
+                false
+            }
+
             val digest = MessageDigest.getInstance(if (meta.lfs) "SHA-256" else "SHA-1")
             if (!meta.lfs) digest.update("blob ${meta.size}\u0000".toByteArray(Charsets.UTF_8))
-            var received = 0L
-            var lastNotice = 0L
+            if (append) {
+                part.inputStream().buffered().use { input ->
+                    val hashBuffer = ByteArray(256 * 1024)
+                    while (true) {
+                        val n = input.read(hashBuffer)
+                        if (n < 0) break
+                        digest.update(hashBuffer, 0, n)
+                    }
+                }
+            }
+
+            var received = offset
+            var lastNotice = offset
             connection.inputStream.use { input ->
-                part.outputStream().buffered().use { output ->
+                FileOutputStream(part, append).buffered().use { output ->
                     val buffer = ByteArray(256 * 1024)
                     while (true) {
                         val n = input.read(buffer)
                         if (n < 0) break
-                        output.write(buffer, 0, n); digest.update(buffer, 0, n); received += n
+                        output.write(buffer, 0, n)
+                        digest.update(buffer, 0, n)
+                        received += n
                         if (received - lastNotice >= 4L * 1024 * 1024) {
                             lastNotice = received
                             notifyModel(id, ((before + received) * 100 / total).toInt().coerceIn(0, 99),
                                 "Загрузка $name: ${humanBytes(received)} / ${humanBytes(meta.size)}", false)
                         }
-                        if (received > meta.size) throw IllegalStateException("Размер $name превышает manifest")
+                        if (received > meta.size) {
+                            part.delete()
+                            throw IllegalStateException("Размер $name превышает manifest")
+                        }
                     }
                 }
             }
-            if (received != meta.size) throw IllegalStateException("Неполная загрузка $name: $received из ${meta.size} байт")
+            if (received != meta.size) {
+                throw IllegalStateException("Неполная загрузка $name: $received из ${meta.size} байт. Можно повторить загрузку — продолжение поддерживается.")
+            }
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
-            if (!actual.equals(meta.oid, true)) throw IllegalStateException("Контрольная сумма не совпала для $name")
+            if (!actual.equals(meta.oid, true)) {
+                part.delete()
+                throw IllegalStateException("Контрольная сумма не совпала для $name; повреждённая частичная загрузка удалена.")
+            }
         } catch (e: Throwable) {
-            part.delete(); throw e
-        } finally { connection.disconnect() }
+            // Preserve valid-sized partial data after transient network errors so the next
+            // attempt can resume. Oversized or complete-but-invalid files are discarded.
+            if (part.isFile && part.length() >= meta.size) part.delete()
+            throw e
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun verifyFile(file: File, meta: ModelFile): Boolean {

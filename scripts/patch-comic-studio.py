@@ -104,7 +104,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
   if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
   if(!data||!String(data).startsWith("data:image/")){$("comicStatus").textContent="Движок не вернул корректное изображение.";return;}
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-  panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
+  panels[0].imageUrl=String(data);render(panels);const persisted=saveProject();$("comicStatus").textContent=persisted?"Первый кадр создан локально на телефоне и сохранён в проекте.":"Первый кадр создан, но автосохранение не удалось. Экспортируйте проект в JSON перед закрытием приложения.";
  };
  nativeRoot.nativeComicModelProgress=function(id,percent,message,done){
   if(Number(id)!==nativeModelRequest)return;
@@ -152,7 +152,8 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    const data={version:1,story:$("comicStory").value,characters:$("comicCharacters").value,mood:$("comicMood").value,composition:$("comicComposition").value,count:$("comicCount").value,style:$("comicStyle").value,endpoint:$("comicEndpoint").value,model:$("comicModel").value,imageEndpoint:$("comicImageEndpoint").value,imageModel:$("comicImageModel").value,localEndpoint:$("comicLocalEndpoint").value,workflow:$("comicWorkflow").value,characterReferenceDataUrl:characterReferenceDataUrl,panels:panels};
    localStorage.setItem(PROJECT_KEY,JSON.stringify(data));
    $("comicStatus").textContent="Проект сохранён на этом устройстве ("+panels.length+" кадров).";
-  }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте их отдельно.";}
+   return true;
+  }catch(e){$("comicStatus").textContent="Не удалось сохранить проект: "+e.message+". Возможно, изображения занимают слишком много места; экспортируйте проект в JSON отдельно.";return false;}
  }
  function loadProject(){
   try{
@@ -337,8 +338,10 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
- async function generateNativeImages(){
+ async function generateNativeImages(retryOnly=false){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
+  if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных кадров для повтора.":"В проекте нет кадров.";return;}
   const bridge=nativeRoot.AndroidDiffusion;
   if(!bridge||typeof bridge.generate!=="function"||typeof bridge.status!=="function"){
    $("comicStatus").textContent="Локальный генератор недоступен в этой сборке. Настройте ComfyUI или внешний генератор в разделе «Дополнительно».";return;
@@ -349,13 +352,18 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    $("comicStatus").textContent="Локальная модель на телефоне не установлена. Ничего не скачано. Откройте «Дополнительно: генерация на телефоне / ComfyUI», чтобы выбрать способ генерации. Статус: "+state;return;
   }
   $("comicGenerateImages").disabled=true;
-  let completed=0;const failures=[];
+  let completed=0;const failures=[];let persistenceFailures=0;
   try{
-   for(let i=0;i<panels.length;i++){
-    $("comicStatus").textContent="Рисую на телефоне кадр "+(i+1)+" из "+panels.length+"…";
-    const nativeBattlePattern=/сраж|битв|бой|войн|арм(ия|ии|ию|ией)|осад|напад|атак|дуэл|меч|дракон|монстр|демон|враг|легион|battle|fight|warfare|army|siege|dragon|monster|demon|enemy/i;
-    const nativeBattleGuide=(nativeBattlePattern.test(String($("comicStory").value)+" "+String(panels[i].scene))||$("comicMood").value==="Эпическая и масштабная")?" EPIC BATTLE DIRECTION: for combat scenes, show a huge cinematic battlefield, clearly readable action choreography, opposing forces, dynamic camera framing, physically believable impacts, sparks, dust, debris, dramatic weather and volumetric light, expressive faces, distinct silhouettes, coherent weapon paths and geography. Combat must feel consequential and grand, not like static posing. Avoid gore and text.":"";
-    const prompt="Create one sequential comic panel. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Character design bible: "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Preserve the same face, age, hairstyle, body proportions, clothing, colors and distinguishing marks. Current scene: "+panels[i].scene+". Dialogue context (show emotion only, no written text): "+panels[i].dialogue+". Story context: "+$("comicStory").value+"."+nativeBattleGuide+" Detailed, cinematic, coherent anatomy and lighting, no text, no letters, no watermark.";
+   for(const i of indices){
+    $("comicStatus").textContent=(retryOnly?"Повторная генерация на телефоне кадра ":"Рисую на телефоне кадр ")+(i+1)+" из "+panels.length+"…";
+    const previousScene=i>0?panels[i-1].scene:"Opening shot: establish the location and character appearance.";
+    const nextScene=i<panels.length-1?panels[i+1].scene:"Closing shot: resolve the immediate action.";
+    const nativeRealism=$("comicStyle").value==="Кинематографический реализм"?"Photorealistic cinematic still, natural skin pores, realistic eyes and hair, accurate anatomy, realistic cloth and metal, motivated lighting, natural shadows, atmospheric depth, 35mm lens, restrained color grade, no waxy skin or plastic CGI.":"High-quality comic illustration, coherent anatomy, expressive faces, strong composition, detailed environment, consistent lighting.";
+    const nativeBattlePatternForPrompt=/сраж|битв|бой|войн|арм(ия|ии|ию|ией)|осад|напад|атак|дуэл|меч|дракон|монстр|демон|враг|легион|battle|fight|warfare|army|siege|dragon|monster|demon|enemy/i;
+    const nativeBattleGuideForPrompt=(nativeBattlePatternForPrompt.test(String($("comicStory").value)+" "+String(panels[i].scene))||$("comicMood").value==="Эпическая и масштабная")?" Epic battle: readable action, opposing forces, distinct silhouettes, dynamic wide framing, plausible movement, dust, debris and dramatic light; avoid static posing and gore.":"";
+    const cameraGuide=["wide establishing shot","medium action shot","close-up on expressive face","low-angle dynamic shot","over-the-shoulder shot","high-angle geography shot","tracking action frame","quiet aftermath close-up"][i%8];
+    // SD 1.5 CLIP has a short context window: put the actual scene and character canon first and avoid repeating the whole story.
+    const prompt="Current scene: "+panels[i].scene+". Immutable character design bible: "+($("comicCharacters").value.trim()||"derive recurring character designs from the story and keep them identical across all panels")+". Preserve same face, age, eye color, skin tone, hair, body proportions, exact costume colors and distinguishing marks. "+nativeRealism+" Camera direction: "+cameraGuide+". Visual style: "+$("comicStyle").value+". Previous panel: "+previousScene+". Next panel: "+nextScene+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+"."+nativeBattleGuideForPrompt+" One polished cinematic comic panel, coherent anatomy, readable action, detailed environment, consistent lighting, no text, no watermark, no extra fingers or limbs.";
     try{
      const data=await new Promise((resolve,reject)=>{
       const id=++nativeImageRequest;let settled=false;
@@ -370,11 +378,11 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
       try{bridge.generate(prompt,String(id));}catch(e){finish(Error(e&&e.message?e.message:String(e)));}
      });
      panels[i].imageUrl=data;failedImageFrames.delete(i);completed++;render(panels);
-     saveProject();
+     if(!saveProject())persistenceFailures++;
     }catch(e){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+e.message);}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;
-   $("comicStatus").textContent=failures.length?"Локально создано "+completed+" из "+panels.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":"Готово: на телефоне созданы все "+completed+" кадра.";
+   $("comicStatus").textContent=(failures.length?(retryOnly?"Повтор завершён: дополнительно создано ":"Локально создано ")+completed+" из "+indices.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":(retryOnly?"Повтор завершён: успешно обработано ":"Готово: на телефоне созданы ")+completed+(retryOnly?" из "+indices.length+" повторяемых кадров.":" кадра."))+(persistenceFailures?" Автосохранение не удалось для "+persistenceFailures+" кадр(ов); экспортируйте проект в JSON перед закрытием приложения.":"");
   }finally{$("comicGenerateImages").disabled=false;}
  }
  async function buildBasicComfyWorkflow(){
@@ -597,7 +605,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",()=>{let nativeStatus="";try{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function")nativeStatus=nativeRoot.AndroidDiffusion.status();}catch(e){nativeStatus="STATUS_ERROR";}if(nativeStatus==="MODEL_PRESENT")return generateNativeImages();if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);if($("comicImageEndpoint").value.trim()&&$("comicImageModel").value.trim())return generateImages(false);if(nativeStatus)return $("comicStatus").textContent="Локальная модель на телефоне не установлена или недоступна ("+nativeStatus+"). Ничего не скачано. Откройте «Дополнительно» и выберите ComfyUI или внешний генератор.";generateImages(false);});
- $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
+ $("comicRetryImages").addEventListener("click",()=>{let nativeStatus="";try{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function")nativeStatus=nativeRoot.AndroidDiffusion.status();}catch(e){nativeStatus="STATUS_ERROR";}if(nativeStatus==="MODEL_PRESENT")return generateNativeImages(true);if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicCheckNative").addEventListener("click",()=>{if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=nativeRoot.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});
@@ -622,7 +630,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
    if(error){$("comicStatus").textContent="Локальная генерация не удалась: "+error;return;}
    if(!data||!String(data).startsWith("data:image/png;base64,")){$("comicStatus").textContent="Движок не вернул корректный PNG.";return;}
    if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
-   panels[0].imageUrl=String(data);render(panels);saveProject();$("comicStatus").textContent="Первый кадр создан локально на телефоне и сохранён в проекте.";
+   panels[0].imageUrl=String(data);render(panels);const persisted=saveProject();$("comicStatus").textContent=persisted?"Первый кадр создан локально на телефоне и сохранён в проекте.":"Первый кадр создан, но автосохранение не удалось. Экспортируйте проект в JSON перед закрытием приложения.";
   };
   // Native inference can stall on unsupported model/runtime combinations. Restore the UI
   // after six minutes and invalidate late callbacks; this does not claim to cancel JNI work.

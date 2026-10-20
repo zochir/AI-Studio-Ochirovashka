@@ -19,6 +19,12 @@ assert.match(comicSource, /panels\[i\]\[field\]=input\.value/, 'panel edits must
 assert.match(comicSource, /async function generateNativeImages\(retryOnly=false\)/, 'native generation must support retry-only mode');
 assert.match(comicSource, /if\(nativeStatus==="MODEL_PRESENT"\)return generateNativeImages\(true\)/, 'retry button must route failed frames to the native generator when the local model is installed');
 assert.match(comicSource, /const indices=retryOnly\?Array\.from\(failedImageFrames\)/, 'native retry must process only failed frames');
+assert.match(comicSource, /Photorealistic live-action cinematic still/, 'native prompts must request realistic materials, faces and cinematic lighting');
+assert.match(comicSource, /Camera direction: /, 'native panels must vary camera language to avoid repetitive compositions');
+assert.match(comicSource, /Previous panel: /, 'native prompts must include preceding-scene continuity');
+assert.match(comicSource, /Next panel: /, 'native prompts must include next-scene continuity');
+assert.match(comicSource, /Immutable character design bible/, 'native prompts must enforce consistent character identity');
+
 
 class Element {
   constructor(id) {

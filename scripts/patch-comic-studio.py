@@ -337,8 +337,10 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
   }catch(e){$("comicStatus").textContent="Генерация изображений остановлена: "+e.message+" Проверьте совместимость API, баланс и CORS; уже готовые кадры сохранены на экране.";}
   finally{$("comicGenerateImages").disabled=false;}
  }
- async function generateNativeImages(){
+ async function generateNativeImages(retryOnly=false){
   if(!panels.length){$("comicStatus").textContent="Сначала создайте раскадровку.";return;}
+  const indices=retryOnly?Array.from(failedImageFrames).sort((a,b)=>a-b):panels.map((_,i)=>i);
+  if(!indices.length){$("comicStatus").textContent=retryOnly?"Нет неудачных кадров для повтора.":"В проекте нет кадров.";return;}
   const bridge=nativeRoot.AndroidDiffusion;
   if(!bridge||typeof bridge.generate!=="function"||typeof bridge.status!=="function"){
    $("comicStatus").textContent="Локальный генератор недоступен в этой сборке. Настройте ComfyUI или внешний генератор в разделе «Дополнительно».";return;
@@ -351,8 +353,8 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
   $("comicGenerateImages").disabled=true;
   let completed=0;const failures=[];
   try{
-   for(let i=0;i<panels.length;i++){
-    $("comicStatus").textContent="Рисую на телефоне кадр "+(i+1)+" из "+panels.length+"…";
+   for(const i of indices){
+    $("comicStatus").textContent=(retryOnly?"Повторная генерация на телефоне кадра ":"Рисую на телефоне кадр ")+(i+1)+" из "+panels.length+"…";
     const nativeBattlePattern=/сраж|битв|бой|войн|арм(ия|ии|ию|ией)|осад|напад|атак|дуэл|меч|дракон|монстр|демон|враг|легион|battle|fight|warfare|army|siege|dragon|monster|demon|enemy/i;
     const nativeBattleGuide=(nativeBattlePattern.test(String($("comicStory").value)+" "+String(panels[i].scene))||$("comicMood").value==="Эпическая и масштабная")?" EPIC BATTLE DIRECTION: for combat scenes, show a huge cinematic battlefield, clearly readable action choreography, opposing forces, dynamic camera framing, physically believable impacts, sparks, dust, debris, dramatic weather and volumetric light, expressive faces, distinct silhouettes, coherent weapon paths and geography. Combat must feel consequential and grand, not like static posing. Avoid gore and text.":"";
     const prompt="Create one sequential comic panel. Visual style: "+$("comicStyle").value+". Mood: "+$("comicMood").value+". Composition: "+$("comicComposition").value+". Character design bible: "+($("comicCharacters").value.trim()||"derive a coherent recurring design from the story and keep it unchanged")+". Preserve the same face, age, hairstyle, body proportions, clothing, colors and distinguishing marks. Current scene: "+panels[i].scene+". Dialogue context (show emotion only, no written text): "+panels[i].dialogue+". Story context: "+$("comicStory").value+"."+nativeBattleGuide+" Detailed, cinematic, coherent anatomy and lighting, no text, no letters, no watermark.";
@@ -374,7 +376,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
     }catch(e){failedImageFrames.add(i);failures.push("кадр "+(i+1)+": "+e.message);}
    }
    $("comicRetryImages").disabled=failedImageFrames.size===0;
-   $("comicStatus").textContent=failures.length?"Локально создано "+completed+" из "+panels.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":"Готово: на телефоне созданы все "+completed+" кадра.";
+   $("comicStatus").textContent=failures.length?(retryOnly?"Повтор завершён: дополнительно создано ":"Локально создано ")+completed+" из "+indices.length+" кадров. "+failures.join(" | ").slice(0,700)+". Повторите неудачные кадры отдельно.":(retryOnly?"Повтор завершён: успешно обработано ":"Готово: на телефоне созданы ")+completed+(retryOnly?" из "+indices.length+" повторяемых кадров.":" кадра.");
   }finally{$("comicGenerateImages").disabled=false;}
  }
  async function buildBasicComfyWorkflow(){
@@ -597,7 +599,7 @@ body > *:not(#comicLab):not(script):not(style){display:none!important}
  $("comicAddCharacter").addEventListener("click",()=>{const name=$("comicCharacterName").value.trim(),look=$("comicCharacterLook").value.trim();if(!name||!look){$("comicStatus").textContent="Для карточки персонажа укажите имя и описание внешности.";return;}const card=name+" — "+look;const current=$("comicCharacters").value.trim();if(current.split("\n").some(line=>line.trim().toLocaleLowerCase()===card.toLocaleLowerCase())){$("comicStatus").textContent="Такая карточка уже добавлена.";return;}$("comicCharacters").value=current?current+"\n"+card:card;$("comicCharacterName").value="";$("comicCharacterLook").value="";$("comicStatus").textContent="Карточка персонажа «"+name+"» добавлена. Описание будет учитываться при генерации кадров.";});
  $("comicGenerate").addEventListener("click",generateScript);
  $("comicGenerateImages").addEventListener("click",()=>{let nativeStatus="";try{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function")nativeStatus=nativeRoot.AndroidDiffusion.status();}catch(e){nativeStatus="STATUS_ERROR";}if(nativeStatus==="MODEL_PRESENT")return generateNativeImages();if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(false);if($("comicImageEndpoint").value.trim()&&$("comicImageModel").value.trim())return generateImages(false);if(nativeStatus)return $("comicStatus").textContent="Локальная модель на телефоне не установлена или недоступна ("+nativeStatus+"). Ничего не скачано. Откройте «Дополнительно» и выберите ComfyUI или внешний генератор.";generateImages(false);});
- $("comicRetryImages").addEventListener("click",()=>{if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
+ $("comicRetryImages").addEventListener("click",()=>{let nativeStatus="";try{if(nativeRoot.AndroidDiffusion&&typeof nativeRoot.AndroidDiffusion.status==="function")nativeStatus=nativeRoot.AndroidDiffusion.status();}catch(e){nativeStatus="STATUS_ERROR";}if(nativeStatus==="MODEL_PRESENT")return generateNativeImages(true);if($("comicLocalEndpoint").value.trim()&&$("comicWorkflow").value.trim())return generateLocalImages(true);return generateImages(true);});
  $("comicUsePollinations").addEventListener("click",()=>{$("comicImageEndpoint").value="https://gen.pollinations.ai/image/";$("comicImageModel").value="flux";$("comicStatus").textContent="Pollinations настроен. Введите API-ключ провайдера и учитывайте лимиты/стоимость выбранной модели.";});
  $("comicCheckLocal").addEventListener("click",checkLocalConnection);
  $("comicCheckNative").addEventListener("click",()=>{if(!nativeRoot.AndroidDiffusion||typeof nativeRoot.AndroidDiffusion.status!=="function"){$("comicStatus").textContent="Нативный движок не подключён в этой сборке Android.";return;}const state=nativeRoot.AndroidDiffusion.status();$("comicStatus").textContent=state==="MODEL_PRESENT"?"Файлы локальной модели найдены. Можно переходить к проверке реальной генерации.":state.startsWith("MODEL_MISSING:")?"Локальный движок собран, но модель не установлена. Не хватает файлов: "+state.slice("MODEL_MISSING:".length)+". Загрузка модели будет отдельным действием с показом размера.":"Статус локального движка: "+state;});

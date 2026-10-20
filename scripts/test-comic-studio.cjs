@@ -23,7 +23,9 @@ assert.match(comicSource, /panels\[i\]\[field\]=input\.value/, 'panel edits must
 assert.match(comicSource, /async function generateNativeImages\(retryOnly=false\)/, 'native generation must support retry-only mode');
 assert.match(comicSource, /if\(nativeStatus==="MODEL_PRESENT"\)return generateNativeImages\(true\)/, 'retry button must route failed frames to the native generator when the local model is installed');
 assert.match(comicSource, /const indices=retryOnly\?Array\.from\(failedImageFrames\)/, 'native retry must process only failed frames');
-assert.match(comicSource, /Photorealistic live-action cinematic still/, 'native prompts must request realistic materials, faces and cinematic lighting');
+assert.match(comicSource, /Photorealistic cinematic still/, 'native prompts must request realistic materials, faces and cinematic lighting');
+assert.match(comicSource, /const prompt="Current scene: "\+panels\[i\]\.scene\+"\. Immutable character design bible:/, 'the current scene and character canon must appear first to survive SD 1.5 CLIP context truncation');
+assert.match(comicSource, /short context window: put the actual scene and character canon first/, 'the prompt builder must document why critical subject details are ordered first');
 assert.match(comicSource, /Camera direction: /, 'native panels must vary camera language to avoid repetitive compositions');
 assert.match(comicSource, /Previous panel: /, 'native prompts must include preceding-scene continuity');
 assert.match(comicSource, /Next panel: /, 'native prompts must include next-scene continuity');
